@@ -1,7 +1,6 @@
 import express from 'express';
-import { SignJWT, jwtVerify } from 'jose';
-import { generateKeyPairSync } from 'crypto';
-import { promisify } from 'util';
+import { generateKeyPairSync, randomBytes } from 'crypto';
+import { v4 as uuidv4 } from 'uuid';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -12,175 +11,94 @@ app.use(express.urlencoded({ extended: true }));
 app.set('view engine', 'ejs');
 app.set('views', './views');
 
-// In-memory storage for demo
-const credentials = new Map(); // credentialId -> credential data
-const issuers = new Map(); // issuerId -> issuer data
-const holders = new Map(); // holderId -> holder data
-
-// Generate a sample issuer on startup
-function initializeSampleIssuer() {
-  const issuerKey = {
-    id: 'issuer-001',
-    name: 'Identity Lab',
-    did: 'did:web:identitylab.id',
-    privateKey: null,
-    publicKey: null,
+// Generate Ed25519 keypair and DID on startup
+function generateIssuerDID() {
+  const { publicKey, privateKey } = generateKeyPairSync('ed25519');
+  
+  // Generate multibase-encoded did:key (simplified - just use random base58-like string)
+  const randomSuffix = randomBytes(32).toString('hex').substring(0, 44);
+  const did = `did:key:z${randomSuffix}`;
+  
+  return {
+    did,
+    publicKey: publicKey.export({ format: 'pem', type: 'spki' }),
+    privateKey: privateKey.export({ format: 'pem', type: 'pkcs8' }),
   };
-  issuers.set(issuerKey.id, issuerKey);
+}
+
+// Initialize issuer keys on startup
+const issuerKeys = generateIssuerDID();
+
+// Helper to generate DID:key
+function generateDidKey() {
+  const randomSuffix = randomBytes(32).toString('hex').substring(0, 44);
+  return `did:key:z${randomSuffix}`;
+}
+
+// Helper to generate simulated Ed25519 signature (base58-like)
+function generateSimulatedProofValue() {
+  const randomBytes_ = randomBytes(64).toString('hex');
+  return `z${randomBytes_.substring(0, 88)}`;
 }
 
 // Routes
 
-// Home page - Demo interface
+// Home page
 app.get('/', (req, res) => {
-  res.render('index', {
-    credentials: Array.from(credentials.values()),
-    issuers: Array.from(issuers.values()),
-    holders: Array.from(holders.values()),
-  });
+  res.render('index');
 });
 
-// Issue credential endpoint
-app.post('/api/credential/issue', (req, res) => {
-  const { subjectName, subjectEmail, credentialType, issuerName } = req.body;
+// Create VC endpoint
+app.post('/api/vc/create', (req, res) => {
+  try {
+    const { subjectDid, claims } = req.body;
 
-  if (!subjectName || !credentialType || !issuerName) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
+    // Validation
+    if (!claims || Object.keys(claims).length === 0) {
+      return res.status(400).json({ error: 'At least one claim is required' });
+    }
 
-  const issuer = Array.from(issuers.values()).find((i) => i.name === issuerName);
-  if (!issuer) {
-    return res.status(404).json({ error: 'Issuer not found' });
-  }
+    // Use provided DID or auto-generate
+    const credentialSubjectId = subjectDid || generateDidKey();
 
-  // Create verifiable credential
-  const credentialId = `cred-${Date.now()}`;
-  const issuanceDate = new Date().toISOString();
+    // Build credential subject with claims
+    const credentialSubject = {
+      id: credentialSubjectId,
+      ...claims,
+    };
 
-  const credential = {
-    id: credentialId,
-    '@context': [
-      'https://www.w3.org/2018/credentials/v1',
-      'https://www.w3.org/2018/credentials/examples/v1',
-    ],
-    type: ['VerifiableCredential', credentialType],
-    issuer: issuer.did,
-    issuanceDate,
-    credentialSubject: {
-      id: `did:example:${subjectName.toLowerCase().replace(/\s+/g, '_')}`,
-      name: subjectName,
-      email: subjectEmail,
-      credentialType,
-    },
-    status: 'issued',
-    jwt: null, // Will be signed later
-  };
+    // W3C VC structure
+    const credential = {
+      '@context': [
+        'https://www.w3.org/2018/credentials/v1',
+        'https://www.w3.org/2018/credentials/examples/v1',
+      ],
+      type: ['VerifiableCredential'],
+      id: `urn:uuid:${uuidv4()}`,
+      issuer: issuerKeys.did,
+      issuanceDate: new Date().toISOString(),
+      credentialSubject,
+      proof: {
+        type: 'Ed25519Signature2020',
+        created: new Date().toISOString(),
+        verificationMethod: `${issuerKeys.did}#key-1`,
+        proofPurpose: 'assertionMethod',
+        proofValue: generateSimulatedProofValue(),
+      },
+    };
 
-  credentials.set(credentialId, credential);
-
-  res.json({
-    success: true,
-    message: `Credential issued for ${subjectName}`,
-    credential,
-  });
-});
-
-// Sign credential endpoint
-app.post('/api/credential/:id/sign', (req, res) => {
-  const { id } = req.params;
-  const credential = credentials.get(id);
-
-  if (!credential) {
-    return res.status(404).json({ error: 'Credential not found' });
-  }
-
-  if (credential.status === 'signed') {
-    return res.status(400).json({ error: 'Credential already signed' });
-  }
-
-  // Create JWT signature (simplified for demo)
-  const jwt = `eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.${Buffer.from(
-    JSON.stringify(credential),
-  ).toString('base64')}.SIGNATURE_${Date.now()}`;
-
-  credential.jwt = jwt;
-  credential.status = 'signed';
-
-  res.json({
-    success: true,
-    message: 'Credential signed',
-    credential,
-    jwt,
-  });
-});
-
-// Verify credential endpoint
-app.post('/api/credential/:id/verify', (req, res) => {
-  const { id } = req.params;
-  const credential = credentials.get(id);
-
-  if (!credential) {
-    return res.status(404).json({ error: 'Credential not found' });
-  }
-
-  if (credential.status !== 'signed') {
-    return res.status(400).json({
-      error: 'Credential must be signed before verification',
+    res.json({
+      success: true,
+      credential,
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
-
-  // Simplified verification for demo
-  const isValid = credential.jwt && credential.jwt.includes('SIGNATURE_');
-
-  res.json({
-    success: true,
-    isValid,
-    message: isValid ? 'Credential verification successful' : 'Invalid credential',
-    credential,
-  });
 });
-
-// Revoke credential endpoint
-app.post('/api/credential/:id/revoke', (req, res) => {
-  const { id } = req.params;
-  const credential = credentials.get(id);
-
-  if (!credential) {
-    return res.status(404).json({ error: 'Credential not found' });
-  }
-
-  credential.status = 'revoked';
-  credential.revokedAt = new Date().toISOString();
-
-  res.json({
-    success: true,
-    message: 'Credential revoked',
-    credential,
-  });
-});
-
-// Get credential details endpoint
-app.get('/api/credential/:id', (req, res) => {
-  const { id } = req.params;
-  const credential = credentials.get(id);
-
-  if (!credential) {
-    return res.status(404).json({ error: 'Credential not found' });
-  }
-
-  res.json(credential);
-});
-
-// Get all credentials endpoint
-app.get('/api/credentials', (req, res) => {
-  res.json(Array.from(credentials.values()));
-});
-
-// Initialize
-initializeSampleIssuer();
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`✅ VC Demo Server running on http://localhost:${PORT}`);
-  console.log(`📄 Open browser: http://localhost:${PORT}`);
+  console.log(`\n✅ SSI VC Issuer running on http://localhost:${PORT}`);
+  console.log(`🔑 Issuer DID: ${issuerKeys.did}`);
+  console.log(`📄 Open browser: http://localhost:${PORT}\n`);
 });
