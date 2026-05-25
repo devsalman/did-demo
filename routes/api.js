@@ -32,8 +32,8 @@ router.post('/vc/create', async (req, res) => {
     // W3C VC structure
     const credential = {
       '@context': [
-        'https://www.w3.org/2018/credentials/v1',
-        'https://www.w3.org/2018/credentials/examples/v1',
+        'https://www.w3.org/ns/credentials/v2',
+        'https://www.w3.org/ns/credentials/examples/v2',
       ],
       type: ['VerifiableCredential'],
       id: `urn:uuid:${crypto.randomUUID()}`,
@@ -42,27 +42,37 @@ router.post('/vc/create', async (req, res) => {
       credentialSubject
     };
 
-    // Generate proof
-    const privKey = await jose.importJWK(jwk, jwk.alg);
-    const payload = jsonStableStringify(credential);
-    const jws = await new jose.CompactSign(new TextEncoder().encode(payload))
-        .setProtectedHeader({ alg: jwk.alg, kid: did.authentication[0], b64: false, crit: ['b64'] })
-        .sign(privKey);
-
-    const jwsParts = jws.split('.');
-    const proof = {
-      type: 'JsonWebSignature2020',
-      created: new Date().toISOString(),
-      proofPurpose: 'assertionMethod',
-      verificationMethod: did.assertionMethod[0],
-      jws: jwsParts[0] + '..' + jwsParts[2]
-    };
-
-    credential.proof = proof;
+    // Sign the credential using JWS
+    const privateKey = await jose.importJWK(jwk, jwk.alg);
+    const signedJwt = await new jose.SignJWT(credential)
+      .setProtectedHeader({ alg: jwk.alg })
+      .sign(privateKey);
 
     res.json({
       success: true,
-      credential,
+      data: {
+        credential: credential,
+        jwt: signedJwt
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/vc/qrcode', async (req, res) => {
+  try {
+    const { credential } = req.body;
+
+    if (!credential) {
+      return res.status(400).json({ error: 'Credential is required' });
+    }
+
+    const qrData = jsonStableStringify(credential);
+    const qrCode = qrcoede.toDataURL(qrData);
+    res.json({
+      success: true,
+      qrCode,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

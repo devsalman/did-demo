@@ -56,6 +56,9 @@
             <button class="output-action" onclick="copyJSON()">
               <span id="copyIcon">📋</span> Copy JSON
             </button>
+            <button class="output-action" onclick="showJWT()">
+              <span id="qrIcon">📋</span> Show JWT
+            </button>
             <button class="output-action" onclick="resetOutput()">
               Reset
             </button>
@@ -79,6 +82,7 @@
       const state = {
         claims: [{ key: '', value: '' }],
         currentVC: null,
+        currentJWT: null,
         isCreating: false,
       };
 
@@ -164,8 +168,9 @@
           const result = await response.json();
 
           if (response.ok) {
-            state.currentVC = result.credential;
-            showSuccessState(result.credential);
+            state.currentVC = result.data.credential;
+            state.currentJWT = result.data.jwt;
+            showSuccessState(state.currentVC);
           } else {
             showErrorState(result.error);
           }
@@ -177,6 +182,15 @@
           state.isCreating = false;
         }
       }
+
+      async function showJWT() {
+        if (!state.currentJWT) {
+          alert('No JWT available');
+          return;
+        }
+
+        showSuccessState(state.currentJWT);
+      } 
 
       function showCreatingState() {
         const panel = document.getElementById('outputPanel');
