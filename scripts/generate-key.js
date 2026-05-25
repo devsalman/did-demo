@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import crypto from 'crypto';
-import { generateKeyPair, exportJWK } from 'jose';
+import { generateKeyPair, calculateJwkThumbprint, exportJWK } from 'jose';
 import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
@@ -70,12 +70,11 @@ async function main() {
 
     // Generate key pair
     const { publicKey, privateKey } = await generateKeyPair(algorithm, {extractable: true});
+    const keyId = await calculateJwkThumbprint(publicKey, 'sha256');
 
     // Export to PEM/PKCS8 format
     const publicJwk = await exportJWK(publicKey);
     const privateJwk = await exportJWK(privateKey);
-
-    const keyId = crypto.randomBytes(16).toString('base64url');
     const did = `did:web:${domain}`;
 
     // Generate DID document
