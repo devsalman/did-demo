@@ -1,108 +1,21 @@
 #!/usr/bin/env node
 
-import { generateKeyPair, exportSPKI, exportPKCS8 } from 'jose';
-import { writeFileSync } from 'fs';
+import crypto from 'crypto';
+import { generateKeyPair, exportJWK } from 'jose';
+import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { hostname } from 'os';
 import { ALGORITHM_CONFIG, generateDidDocument, generateSummary } from './did-config.js';
 
-const __dirname = fileURLToPath(import.meta.url).split('/').slice(0, -1).join('/');
-const OUTPUT_DIR = join(__dirname, '..', 'output');
+const OUTPUT_DIR = './output';
+mkdirSync(OUTPUT_DIR, { recursive: true });
 
 /**
  * Validate the provided algorithm
  */
 function isValidAlgorithm(algorithm) {
   return Object.keys(ALGORITHM_CONFIG).includes(algorithm);
-}
-
-/**
- * Convert JWK with private components from exportPKCS8
- */
-async function extractJwkFromKey(algorithm, publicKeyBuffer, privateKeyBuffer) {
-  const config = ALGORITHM_CONFIG[algorithm];
-
-  // Parse PKCS8 to extract components
-  // For this, we'll use a different approach with crypto
-  const crypto = (await import('crypto')).default || (await import('crypto'));
-
-  if (config.keyType === 'EC') {
-    // For EC keys, we need to parse the PKCS8 structure
-    // Using a simpler approach: regenerate the key as JWK using node's crypto
-    const keyObject = crypto.createPrivateKey(privateKeyBuffer);
-    const jwk = keyObject.export({ format: 'jwk' });
-    return {
-      private: {
-        kty: 'EC',
-        crv: config.crv,
-        alg: config.alg,
-        x: jwk.x,
-        y: jwk.y,
-        d: jwk.d,
-        use: 'sig',
-        key_ops: ['sign'],
-      },
-      public: {
-        kty: 'EC',
-        crv: config.crv,
-        alg: config.alg,
-        x: jwk.x,
-        y: jwk.y,
-        use: 'sig',
-        key_ops: ['verify'],
-      },
-    };
-  } else if (config.keyType === 'OKP') {
-    const keyObject = crypto.createPrivateKey(privateKeyBuffer);
-    const jwk = keyObject.export({ format: 'jwk' });
-    return {
-      private: {
-        kty: 'OKP',
-        crv: config.crv,
-        alg: config.alg,
-        x: jwk.x,
-        d: jwk.d,
-        use: 'sig',
-        key_ops: ['sign'],
-      },
-      public: {
-        kty: 'OKP',
-        crv: config.crv,
-        alg: config.alg,
-        x: jwk.x,
-        use: 'sig',
-        key_ops: ['verify'],
-      },
-    };
-  } else if (config.keyType === 'RSA') {
-    const keyObject = crypto.createPrivateKey(privateKeyBuffer);
-    const jwk = keyObject.export({ format: 'jwk' });
-    return {
-      private: {
-        kty: 'RSA',
-        alg: config.alg,
-        n: jwk.n,
-        e: jwk.e,
-        d: jwk.d,
-        p: jwk.p,
-        q: jwk.q,
-        dp: jwk.dp,
-        dq: jwk.dq,
-        qi: jwk.qi,
-        use: 'sig',
-        key_ops: ['sign'],
-      },
-      public: {
-        kty: 'RSA',
-        alg: config.alg,
-        n: jwk.n,
-        e: jwk.e,
-        use: 'sig',
-        key_ops: ['verify'],
-      },
-    };
-  }
 }
 
 /**
@@ -156,40 +69,32 @@ async function main() {
     console.log(`🌐 Domain: ${domain}`);
 
     // Generate key pair
-    const { publicKey, privateKey } = await generateKeyPair(algorithm);
+    const { publicKey, privateKey } = await generateKeyPair(algorithm, {extractable: true});
 
     // Export to PEM/PKCS8 format
-    const publicPem = await exportSPKI(publicKey);
-    const privatePem = await exportPKCS8(privateKey);
+    const publicJwk = await exportJWK(publicKey);
+    const privateJwk = await exportJWK(privateKey);
 
-    // Extract JWK components
-    const timestamp = Date.now();
-    const keyId = `key-${timestamp}`;
+    const keyId = crypto.randomBytes(16).toString('base64url');
     const did = `did:web:${domain}`;
 
-    const jwks = await extractJwkFromKey(algorithm, publicPem, privatePem);
-
-    // Add key ID to JWKs
-    jwks.private.kid = keyId;
-    jwks.public.kid = keyId;
-
     // Generate DID document
-    const didDocument = generateDidDocument(did, jwks.public, keyId);
+    const didDocument = generateDidDocument(did, publicJwk, keyId);
 
     // Write files
-    const privateKeyPath = join(OUTPUT_DIR, `key_${timestamp}.json`);
+    const privateKeyPath = join(OUTPUT_DIR, `key_${keyId}.json`);
     const didPath = join(OUTPUT_DIR, 'did.json');
     const summaryPath = join(OUTPUT_DIR, `did_${algorithm}.txt`);
 
-    writeFileSync(privateKeyPath, JSON.stringify(jwks.private, null, 2));
+    writeFileSync(privateKeyPath, JSON.stringify(privateJwk, null, 2));
     writeFileSync(didPath, JSON.stringify(didDocument, null, 2));
 
-    const summary = generateSummary(algorithm, keyId, jwks.public);
+    const summary = generateSummary(algorithm, keyId, publicJwk);
     writeFileSync(summaryPath, summary);
 
     console.log(`\n✅ Key generation complete!\n`);
     console.log(`📁 Output files saved to: ${OUTPUT_DIR}/`);
-    console.log(`  - Private key: key_${timestamp}.json`);
+    console.log(`  - Private key: key_${keyId}.json`);
     console.log(`  - DID document: did.json`);
     console.log(`  - Summary: did_${algorithm}.txt`);
     console.log(`\n⚠️  Keep the private key file secure!`);
