@@ -1,0 +1,28 @@
+DID:web Key Generation Summary
+==================================
+
+Algorithm: ES256
+Description: ECDSA with SHA-256 (P-256 curve)
+Generated: 2026-05-25T21:42:51.585Z
+Key ID: 9WIiHtLIx9wI33G0MEyIeBwAVKpGR-IMSBsx6UOBaz4
+
+Public Key (JWK):
+{
+  "kty": "EC",
+  "x": "0wZjbW260L_4Fh01xttDp4YepzJAZn2dqATHKeyJxYQ",
+  "y": "lSIDju2OosbiP7eCehnfkKoLHivvNmiyurXrt3hBuxA",
+  "crv": "P-256"
+}
+
+Usage:
+- Store the private key securely (from key_<timestamp>.json)
+- Use the public key in did.json for DID resolution
+- Host did.json at: https://yourdomain.com/.well-known/did.json
+
+DID Format: did:web:yourdomain.com
+
+Next Steps:
+1. Customize the DID identifier in did.json
+2. Host the did.json file at your domain's .well-known endpoint
+3. Use the private key for signing operations
+4. Keep the private key secret and secure

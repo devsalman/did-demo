@@ -1,0 +1,41 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/did/v1",
+    "https://w3id.org/security/suites/jws-2020/v1"
+  ],
+  "id": "did:web:identitylab.id",
+  "verificationMethod": [
+    {
+      "id": "did:web:identitylab.id#9WIiHtLIx9wI33G0MEyIeBwAVKpGR-IMSBsx6UOBaz4",
+      "type": "JsonWebKey2020",
+      "controller": "did:web:identitylab.id",
+      "publicKeyJwk": {
+        "kty": "EC",
+        "x": "0wZjbW260L_4Fh01xttDp4YepzJAZn2dqATHKeyJxYQ",
+        "y": "lSIDju2OosbiP7eCehnfkKoLHivvNmiyurXrt3hBuxA",
+        "crv": "P-256"
+      }
+    }
+  ],
+  "authentication": [
+    "did:web:identitylab.id#9WIiHtLIx9wI33G0MEyIeBwAVKpGR-IMSBsx6UOBaz4"
+  ],
+  "assertionMethod": [
+    "did:web:identitylab.id#9WIiHtLIx9wI33G0MEyIeBwAVKpGR-IMSBsx6UOBaz4"
+  ],
+  "capabilityInvocation": [
+    "did:web:identitylab.id#9WIiHtLIx9wI33G0MEyIeBwAVKpGR-IMSBsx6UOBaz4"
+  ],
+  "capabilityDelegation": [
+    "did:web:identitylab.id#9WIiHtLIx9wI33G0MEyIeBwAVKpGR-IMSBsx6UOBaz4"
+  ],
+  "service": [
+    {
+      "id": "did:web:identitylab.id#domain",
+      "type": "LinkedDomains",
+      "serviceEndpoint": [
+        "https://identitylab.id"
+      ]
+    }
+  ]
+}

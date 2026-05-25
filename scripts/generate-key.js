@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import { hostname } from 'os';
 import { ALGORITHM_CONFIG, generateDidDocument, generateSummary } from './did-config.js';
 
-const OUTPUT_DIR = './output';
+const OUTPUT_DIR = './out';
 mkdirSync(OUTPUT_DIR, { recursive: true });
 
 /**
@@ -81,7 +81,7 @@ async function main() {
     const didDocument = generateDidDocument(did, publicJwk, keyId);
 
     // Write files
-    const privateKeyPath = join(OUTPUT_DIR, `key_${keyId}.json`);
+    const privateKeyPath = join(OUTPUT_DIR, 'key.json');
     const didPath = join(OUTPUT_DIR, 'did.json');
     const summaryPath = join(OUTPUT_DIR, `did_${algorithm}.txt`);
 
