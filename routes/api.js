@@ -5,8 +5,8 @@ import jsonStableStringify from 'json-stable-stringify';
 import fs from 'fs';
 
 const router = express.Router();
-const didPath = '/home/salman/.identitylab.id/key/did.json';
-const jwkPath = '/home/salman/.identitylab.id/key/key_1779537506886.json';
+const didPath = process.env.PUBLIC_KEY_FILE || '~/.key/did.json';
+const jwkPath = process.env.PRIVATE_KEY_FILE || '~/.key/key.json';
 const jwk = JSON.parse(fs.readFileSync(jwkPath, 'utf-8'));
 const did = JSON.parse(fs.readFileSync(didPath, 'utf-8'));
 
@@ -43,7 +43,7 @@ router.post('/vc/create', async (req, res) => {
     };
 
     // Sign the credential using JWS
-    const privateKey = await jose.importJWK(jwk, jwk.alg);
+    const privateKey = await jose.importJWK(jwk);
     const signedJwt = await new jose.SignJWT(credential)
       .setProtectedHeader({ alg: jwk.alg })
       .sign(privateKey);

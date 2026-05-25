@@ -3,16 +3,11 @@ DID:web Key Generation Summary
 
 Algorithm: ES256
 Description: ECDSA with SHA-256 (P-256 curve)
-Generated: 2026-05-25T21:42:51.585Z
-Key ID: 9WIiHtLIx9wI33G0MEyIeBwAVKpGR-IMSBsx6UOBaz4
+Generated: 2026-05-25T22:03:38.179Z
+Key ID: undefined
 
 Public Key (JWK):
-{
-  "kty": "EC",
-  "x": "0wZjbW260L_4Fh01xttDp4YepzJAZn2dqATHKeyJxYQ",
-  "y": "lSIDju2OosbiP7eCehnfkKoLHivvNmiyurXrt3hBuxA",
-  "crv": "P-256"
-}
+"lk19_t2cw8NhWaw7z9Zq6lPH6QiwbuymI7D7XjLMIhU"
 
 Usage:
 - Store the private key securely (from key_<timestamp>.json)

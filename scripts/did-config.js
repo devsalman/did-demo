@@ -64,8 +64,8 @@ export const ALGORITHM_CONFIG = {
  * @param {string} keyId - The key identifier
  * @returns {Object} The complete DID document
  */
-export function generateDidDocument(did, publicKey, keyId) {
-  const verificationMethodId = `${did}#${keyId}`;
+export function generateDidDocument(did, publicKey) {
+  const verificationMethodId = `${did}#${publicKey.kid}`;
   // Extract domain from DID (e.g., "example.com" from "did:web:example.com")
   const domain = did.replace('did:web:', '');
   const domainUrl = `https://${domain}`;
@@ -105,7 +105,7 @@ export function generateDidDocument(did, publicKey, keyId) {
  * @param {Object} publicKey - The public JWK
  * @returns {string} The summary text
  */
-export function generateSummary(algorithm, keyId, publicKey) {
+export function generateSummary(algorithm, publicKey) {
   const config = ALGORITHM_CONFIG[algorithm];
   const timestamp = new Date().toISOString();
 
@@ -115,7 +115,7 @@ export function generateSummary(algorithm, keyId, publicKey) {
 Algorithm: ${algorithm}
 Description: ${config.description}
 Generated: ${timestamp}
-Key ID: ${keyId}
+Key ID: ${publicKey.kid}
 
 Public Key (JWK):
 ${JSON.stringify(publicKey, null, 2)}

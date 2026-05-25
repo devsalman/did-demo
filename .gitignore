@@ -6,5 +6,5 @@ yarn.lock
 *.log
 dist/
 build/
-output/
+out/
 .eslintcache

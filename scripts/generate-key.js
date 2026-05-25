@@ -70,15 +70,22 @@ async function main() {
 
     // Generate key pair
     const { publicKey, privateKey } = await generateKeyPair(algorithm, {extractable: true});
-    const keyId = await calculateJwkThumbprint(publicKey, 'sha256');
+    const publicKeyId = await calculateJwkThumbprint(publicKey, 'sha256');
+    const privateKeyId = await calculateJwkThumbprint(privateKey, 'sha256');
 
     // Export to PEM/PKCS8 format
     const publicJwk = await exportJWK(publicKey);
+    publicJwk.kid = publicKeyId;
+    publicJwk.alg = algorithm;
+    
     const privateJwk = await exportJWK(privateKey);
+    privateJwk.kid = privateKeyId;
+    privateJwk.alg = algorithm;
+    
     const did = `did:web:${domain}`;
 
     // Generate DID document
-    const didDocument = generateDidDocument(did, publicJwk, keyId);
+    const didDocument = generateDidDocument(did, publicJwk);
 
     // Write files
     const privateKeyPath = join(OUTPUT_DIR, 'key.json');
@@ -88,12 +95,12 @@ async function main() {
     writeFileSync(privateKeyPath, JSON.stringify(privateJwk, null, 2));
     writeFileSync(didPath, JSON.stringify(didDocument, null, 2));
 
-    const summary = generateSummary(algorithm, keyId, publicJwk);
+    const summary = generateSummary(algorithm, publicKeyId, publicJwk);
     writeFileSync(summaryPath, summary);
 
     console.log(`\n✅ Key generation complete!\n`);
     console.log(`📁 Output files saved to: ${OUTPUT_DIR}/`);
-    console.log(`  - Private key: key_${keyId}.json`);
+    console.log(`  - Private key: key.json`);
     console.log(`  - DID document: did.json`);
     console.log(`  - Summary: did_${algorithm}.txt`);
     console.log(`\n⚠️  Keep the private key file secure!`);
