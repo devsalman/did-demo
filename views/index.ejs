@@ -1,98 +1,109 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SSI VC Issuer — Create Verifiable Credentials</title>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/css/style.css" />
-  </head>
-  <body>
-    <header>
-      <div class="header-left">
-        <div class="shield-icon">🛡️</div>
-        SSI / VC ISSUER
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SSI VC Issuer — Create Verifiable Credentials</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@700&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+
+<body>
+  <header>
+    <div class="header-left">
+      <div class="shield-icon">🛡️</div>
+      SSI / VC ISSUER
+    </div>
+    <div class="header-right">Demo</div>
+  </header>
+
+  <div class="container">
+    <!-- Left Column — Form -->
+    <div class="form-section">
+      <h1>Issue a Verifiable<br /><span class="accent">Credential</span></h1>
+      <p>Create and sign a W3C-compliant verifiable credential with custom claims.</p>
+
+      <!-- Subject DID -->
+      <div class="form-group">
+        <label class="form-label">Subject DID <span class="form-label-note">(leave blank to
+            auto-generate)</span></label>
+        <input type="text" id="subjectDid" placeholder="did:key:z…" />
       </div>
-      <div class="header-right">Demo</div>
-    </header>
 
-    <div class="container">
-      <!-- Left Column — Form -->
-      <div class="form-section">
-        <h1>Issue a Verifiable<br /><span class="accent">Credential</span></h1>
-        <p>Create and sign a W3C-compliant verifiable credential with custom claims.</p>
-
-        <!-- Subject DID -->
-        <div class="form-group">
-          <label class="form-label">Subject DID <span class="form-label-note">(leave blank to auto-generate)</span></label>
-          <input type="text" id="subjectDid" placeholder="did:key:z…" />
+      <!-- Claims -->
+      <div class="form-group">
+        <div class="claims-header">
+          <label class="form-label">Claims</label>
+          <span class="claims-count"><span id="claimsCount">1</span> field</span>
         </div>
 
-        <!-- Claims -->
-        <div class="form-group">
-          <div class="claims-header">
-            <label class="form-label">Claims</label>
-            <span class="claims-count"><span id="claimsCount">1</span> field</span>
-          </div>
+        <div id="claimsContainer"></div>
 
-          <div id="claimsContainer"></div>
-
-          <button class="add-claim-btn" onclick="addClaim()">
-            <span>+</span> Add field
-          </button>
-        </div>
-
-        <!-- Create VC Button -->
-        <button class="create-btn" onclick="createVC()" id="createBtn">
-          CREATE VC
+        <button class="add-claim-btn" onclick="addClaim()">
+          <span>+</span> Add field
         </button>
       </div>
 
-      <!-- Right Column — Output Panel -->
-      <div class="output-section">
-        <div class="output-header">
-          <span class="output-label">Output</span>
-          <div class="output-actions" id="outputActions" style="display: none;">
-            <button class="output-action" onclick="copyJSON()">
-              <span id="copyIcon">📋</span> Copy JSON
-            </button>
-            <button class="output-action" onclick="showJWT()">
-              <span id="qrIcon">📋</span> Show JWT
-            </button>
-            <button class="output-action" onclick="resetOutput()">
-              Reset
-            </button>
-          </div>
-        </div>
-
-        <div class="output-panel" id="outputPanel">
-          <div class="state-idle">
-            <div class="idle-icon">🛡️</div>
-            <div class="idle-text">Fill in claims and press Create VC</div>
-          </div>
-        </div>
-
-        <div class="output-note">
-          Output conforms to W3C VC Data Model 1.1. Proof value is simulated — wire a real Ed25519 signer for production.
-        </div>
-      </div>
+      <!-- Create VC Button -->
+      <button class="create-btn" onclick="createVC()" id="createBtn">
+        CREATE VC
+      </button>
     </div>
 
-    <script>
-      const state = {
-        claims: [{ key: '', value: '' }],
-        currentVC: null,
-        currentJWT: null,
-        isCreating: false,
-      };
+    <!-- Right Column — Output Panel -->
+    <div class="output-section">
+      <div class="output-header">
+        <span class="output-label">Output</span>
+        <div class="output-actions" id="outputActions" style="display: none;">
+          <button class="output-action" onclick="copyJSON()">
+            <span id="copyIcon">📋</span> Copy
+          </button>
+          <button class="output-action" onclick="showSuccessState(state.currentVC)">
+            <span id="qrIcon">📋</span> JSON
+          </button>
+          <button class="output-action" onclick="showSuccessState(state.currentJWT)">
+            <span id="qrIcon">📋</span> JWT
+          </button>
+          <button class="output-action" onclick="showQR()">
+            <span id="qrIcon">📋</span> QR
+          </button>
+          <button class="output-action" onclick="resetOutput()">
+            Reset
+          </button>
+        </div>
+      </div>
 
-      function updateClaimsCount() {
-        document.getElementById('claimsCount').textContent = state.claims.length;
-      }
+      <div class="output-panel" id="outputPanel">
+        <div class="state-idle">
+          <div class="idle-icon">🛡️</div>
+          <div class="idle-text">Fill in claims and press Create VC</div>
+        </div>
+      </div>
 
-      function renderClaims() {
-        const container = document.getElementById('claimsContainer');
-        container.innerHTML = state.claims.map((claim, idx) => `
+      <div class="output-note">
+        Output conforms to W3C VC Data Model 2.0. Using W3C VC JOSE proof mechanism.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      claims: [{ key: '', value: '' }],
+      currentVC: null,
+      currentJWT: null,
+      isCreating: false,
+    };
+
+    function updateClaimsCount() {
+      document.getElementById('claimsCount').textContent = state.claims.length;
+    }
+
+    function renderClaims() {
+      const container = document.getElementById('claimsContainer');
+      container.innerHTML = state.claims.map((claim, idx) => `
           <div class="claim-row" id="claim-${idx}">
             <div class="claim-key">
               <input type="text" id="claim-key-${idx}" placeholder="e.g., name" value="${claim.key}" onchange="updateClaim(${idx}, 'key', this.value)" />
@@ -108,94 +119,85 @@
             ${!claim.key && claim.value ? '<div class="claim-error"><span>⚠️</span> Key required</div>' : ''}
           </div>
         `).join('');
-        updateClaimsCount();
-      }
+      updateClaimsCount();
+    }
 
-      function updateClaim(idx, field, value) {
-        console.log(`Updating claim ${idx} field ${field} to value:`, value);
-        state.claims[idx][field] = value;
+    function updateClaim(idx, field, value) {
+      console.log(`Updating claim ${idx} field ${field} to value:`, value);
+      state.claims[idx][field] = value;
+      renderClaims();
+    }
+
+    function deleteClaim(idx) {
+      if (state.claims.length > 1) {
+        state.claims.splice(idx, 1);
         renderClaims();
       }
+    }
 
-      function deleteClaim(idx) {
-        if (state.claims.length > 1) {
-          state.claims.splice(idx, 1);
-          renderClaims();
+    function addClaim() {
+      state.claims.push({ key: '', value: '' });
+      renderClaims();
+    }
+
+    function isDuplicateKey(key, excludeIdx) {
+      return state.claims.filter((c, i) => c.key === key && i !== excludeIdx && c.key !== '').length > 0;
+    }
+
+    function getValidClaims() {
+      console.log('Getting valid claims from state:', state.claims)
+      return state.claims
+    }
+
+    async function createVC() {
+      const validClaims = getValidClaims();
+      if (validClaims.length === 0) {
+        alert('Please fill at least one claim (key and value)');
+        return;
+      }
+
+      const subjectDid = document.getElementById('subjectDid').value;
+      const claims = Object.fromEntries(validClaims.map(c => [c.key, c.value]));
+
+      state.isCreating = true;
+      const btn = document.getElementById('createBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="btn-spinner"></span>Signing credential…';
+
+      showCreatingState();
+
+      try {
+        console.log('Creating VC with subjectDid:', subjectDid, 'claims:', claims);
+        await new Promise(r => setTimeout(r, 2000));
+
+        const response = await fetch('/api/vc/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subjectDid, claims }),
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          state.currentVC = result.data.credential;
+          state.currentJWT = result.data.jwt;
+          showSuccessState(state.currentVC);
+        } else {
+          showErrorState(result.error);
         }
+      } catch (error) {
+        showErrorState(error.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'CREATE VC';
+        state.isCreating = false;
       }
+    }
 
-      function addClaim() {
-        state.claims.push({ key: '', value: '' });
-        renderClaims();
-      }
-
-      function isDuplicateKey(key, excludeIdx) {
-        return state.claims.filter((c, i) => c.key === key && i !== excludeIdx && c.key !== '').length > 0;
-      }
-
-      function getValidClaims() {
-        console.log('Getting valid claims from state:', state.claims)
-        return state.claims
-      }
-
-      async function createVC() {
-        const validClaims = getValidClaims();
-        if (validClaims.length === 0) {
-          alert('Please fill at least one claim (key and value)');
-          return;
-        }
-
-        const subjectDid = document.getElementById('subjectDid').value;
-        const claims = Object.fromEntries(validClaims.map(c => [c.key, c.value]));
-
-        state.isCreating = true;
-        const btn = document.getElementById('createBtn');
-        btn.disabled = true;
-        btn.innerHTML = '<span class="btn-spinner"></span>Signing credential…';
-
-        showCreatingState();
-
-        try {
-          console.log('Creating VC with subjectDid:', subjectDid, 'claims:', claims);
-          await new Promise(r => setTimeout(r, 2000));
-
-          const response = await fetch('/api/vc/create', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ subjectDid, claims }),
-          });
-
-          const result = await response.json();
-
-          if (response.ok) {
-            state.currentVC = result.data.credential;
-            state.currentJWT = result.data.jwt;
-            showSuccessState(state.currentVC);
-          } else {
-            showErrorState(result.error);
-          }
-        } catch (error) {
-          showErrorState(error.message);
-        } finally {
-          btn.disabled = false;
-          btn.innerHTML = 'CREATE VC';
-          state.isCreating = false;
-        }
-      }
-
-      async function showJWT() {
-        if (!state.currentJWT) {
-          alert('No JWT available');
-          return;
-        }
-
-        showSuccessState(state.currentJWT);
-      } 
-
-      function showCreatingState() {
-        const panel = document.getElementById('outputPanel');
-        panel.className = 'output-panel';
-        panel.innerHTML = `
+    function showCreatingState() {
+      const panel = document.getElementById('outputPanel');
+      panel.className = 'output-panel';
+      panel.innerHTML = `
           <div class="state-idle" style="gap: 24px;">
             <div class="signing-grid">
               ${Array(32).fill().map(() => '<div class="signing-cell"></div>').join('')}
@@ -203,71 +205,91 @@
             <div class="signing-text">SIGNING…</div>
           </div>
         `;
-        document.getElementById('outputActions').style.display = 'none';
-      }
+      document.getElementById('outputActions').style.display = 'none';
+    }
 
-      function showSuccessState(vc) {
-        const panel = document.getElementById('outputPanel');
-        const jsonStr = JSON.stringify(vc, null, 2);
-        const highlighted = jsonStr
-          .replace(/"([^"]+)"(\s*:)/g, '<span class="json-key">"$1"</span>$2')
-          .replace(/: "([^"]*)"/g, ': <span class="json-string">"$1"</span>')
-          .replace(/: (\d+|true|false|null)/g, ': <span class="json-string">$1</span>')
-          .replace(/"proofValue"[^}]*"[^"]*"/, (match) => `<span class="json-proof">${match}</span>`)
-          .replace(/[{}[\]]/g, (match) => `<span class="json-bracket">${match}</span>`);
+    function showSuccessState(vc) {
+      const panel = document.getElementById('outputPanel');
+      const jsonStr = JSON.stringify(vc, null, 2);
+      const highlighted = jsonStr
+        .replace(/"([^"]+)"(\s*:)/g, '<span class="json-key">"$1"</span>$2')
+        .replace(/: "([^"]*)"/g, ': <span class="json-string">"$1"</span>')
+        .replace(/: (\d+|true|false|null)/g, ': <span class="json-string">$1</span>')
+        .replace(/"proofValue"[^}]*"[^"]*"/, (match) => `<span class="json-proof">${match}</span>`)
+        .replace(/[{}[\]]/g, (match) => `<span class="json-bracket">${match}</span>`)
+        .replace(
+          /"([A-Za-z0-9-_]+)\.([A-Za-z0-9-_]+)\.([A-Za-z0-9-_]+)"/g,
+          (_, header, payload, signature) =>
+            `"${[
+              `<span class="jwt-header">${header}</span>`,
+              `<span class="jwt-dot">.</span>`,
+              `<span class="jwt-payload">${payload}</span>`,
+              `<span class="jwt-dot">.</span>`,
+              `<span class="jwt-signature">${signature}</span>`
+            ].join('')}"`
+        )
 
-        panel.className = 'output-panel';
-        panel.innerHTML = `
+      panel.className = 'output-panel';
+      panel.innerHTML = `
           <div class="output-json">${highlighted}</div>
           <div class="output-footer">
             <div class="status-dot"></div>
             <div class="status-text">CREDENTIAL SIGNED</div>
-            <div class="proof-type">Ed25519Signature2020</div>
           </div>
         `;
-        document.getElementById('outputActions').style.display = 'flex';
-      }
+      document.getElementById('outputActions').style.display = 'flex';
+    }
 
-      function showErrorState(error) {
-        const panel = document.getElementById('outputPanel');
-        panel.className = 'output-panel';
-        panel.innerHTML = `
+    function showQR() {
+      const panel = document.getElementById('outputPanel');
+      panel.className = 'output-panel qr';
+      panel.innerHTML = `
+          <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(state.currentJWT)}" alt="QR Code" />
+        `;
+      document.getElementById('outputActions').style.display = 'flex';
+    }
+
+    function showErrorState(error) {
+      const panel = document.getElementById('outputPanel');
+      panel.className = 'output-panel';
+      panel.innerHTML = `
           <div class="state-error">
             <div class="error-icon">⚠️</div>
             <div class="error-message">${error}</div>
             <button class="error-retry" onclick="createVC()">Try again</button>
           </div>
         `;
-        document.getElementById('outputActions').style.display = 'none';
-      }
+      document.getElementById('outputActions').style.display = 'none';
+    }
 
-      function copyJSON() {
-        const json = JSON.stringify(state.currentVC, null, 2);
-        navigator.clipboard.writeText(json).then(() => {
-          const btn = event.target.closest('.output-action');
-          const icon = btn.querySelector('#copyIcon');
-          const text = btn.textContent;
-          btn.innerHTML = '<span>✓</span> Copied';
-          setTimeout(() => {
-            btn.innerHTML = '<span>📋</span> Copy JSON';
-          }, 2000);
-        });
-      }
+    function copyJSON() {
+      const json = JSON.stringify(state.currentVC, null, 2);
+      navigator.clipboard.writeText(json).then(() => {
+        const btn = event.target.closest('.output-action');
+        const icon = btn.querySelector('#copyIcon');
+        const text = btn.textContent;
+        btn.innerHTML = '<span>✓</span> Copied';
+        setTimeout(() => {
+          btn.innerHTML = '<span>📋</span> Copy JSON';
+        }, 2000);
+      });
+    }
 
-      function resetOutput() {
-        const panel = document.getElementById('outputPanel');
-        panel.className = 'output-panel';
-        panel.innerHTML = `
+    function resetOutput() {
+      const panel = document.getElementById('outputPanel');
+      panel.className = 'output-panel';
+      panel.innerHTML = `
           <div class="state-idle">
             <div class="idle-icon">🛡️</div>
             <div class="idle-text">Fill in claims and press Create VC</div>
           </div>
         `;
-        document.getElementById('outputActions').style.display = 'none';
-        state.currentVC = null;
-      }
+      document.getElementById('outputActions').style.display = 'none';
+      state.currentVC = null;
+    }
 
-      renderClaims();
-    </script>
-  </body>
+    renderClaims();
+  </script>
+</body>
+
 </html>

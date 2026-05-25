@@ -438,6 +438,21 @@ input::placeholder {
     color: rgba(232, 232, 226, 0.15);
 }
 
+.jwt-header {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.jwt-payload {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.jwt-signature {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
 .output-footer {
     position: absolute;
     bottom: 0;

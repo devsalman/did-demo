@@ -45,7 +45,7 @@ router.post('/vc/create', async (req, res) => {
     // Sign the credential using JWS
     const privateKey = await jose.importJWK(jwk);
     const signedJwt = await new jose.SignJWT(credential)
-      .setProtectedHeader({ alg: jwk.alg })
+      .setProtectedHeader({ alg: jwk.alg, iss: did.id, kid: jwk.kid })
       .sign(privateKey);
 
     res.json({
