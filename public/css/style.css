@@ -453,6 +453,13 @@ input::placeholder {
     font-weight: 600;
 }
 
+.jwt-encoded-view {
+    font-size: 12px;
+    word-break: break-all;
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1.8;
+}
+
 .output-footer {
     position: absolute;
     bottom: 0;

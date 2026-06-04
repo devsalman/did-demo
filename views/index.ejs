@@ -61,8 +61,11 @@
           <button class="output-action" onclick="showCredentialView()">
             <span>📄</span> JSON
           </button>
-          <button class="output-action" onclick="showJWTView()">
+          <button class="output-action" onclick="showJWTEncodedView()">
             <span>🔐</span> JWT
+          </button>
+          <button class="output-action" onclick="showJWTDecodedView()">
+            <span>🔓</span> Decoded
           </button>
           <button class="output-action" onclick="showQRView()">
             <span>📱</span> QR
@@ -270,10 +273,17 @@
 
     function copyCurrentOutput() {
       let textToCopy = '';
-      if (state.currentVC && state.currentView === 'json') {
+      
+      if (state.currentView === 'json' && state.currentVC) {
         textToCopy = JSON.stringify(state.currentVC, null, 2);
-      } else if (state.currentJWT && state.currentView === 'jwt') {
+      } else if (state.currentView === 'jwt-encoded' && state.currentJWT) {
         textToCopy = state.currentJWT;
+      } else if (state.currentView === 'jwt-decoded' && state.currentJWT) {
+        const jwtParts = state.currentJWT.split('.');
+        const header = JSON.parse(atob(jwtParts[0]));
+        const payload = JSON.parse(atob(jwtParts[1]));
+        const displayObj = { header, payload, signature: jwtParts[2].substring(0, 32) + '...' };
+        textToCopy = JSON.stringify(displayObj, null, 2);
       } else {
         return;
       }
@@ -283,7 +293,7 @@
         const icon = btn.querySelector('span:first-child');
         btn.innerHTML = '<span>✓</span> Copied';
         setTimeout(() => {
-          btn.innerHTML = '<span>📋</span> Copy';
+          btn.innerHTML = '<span id="copyIcon">📋</span> Copy';
         }, 2000);
       }).catch(err => console.error('Copy failed:', err));
     }
@@ -295,42 +305,72 @@
       }
     }
 
-    function showJWTView() {
+    function showJWTEncodedView() {
       if (state.currentJWT) {
-        state.currentView = 'jwt';
+        state.currentView = 'jwt-encoded';
         const panel = document.getElementById('outputPanel');
+        
+        // Split JWT into parts for highlighting
         const jwtParts = state.currentJWT.split('.');
-        const header = JSON.parse(atob(jwtParts[0]));
-        const payload = JSON.parse(atob(jwtParts[1]));
+        const highlightedJWT = `${jwtParts[0]}.<wbr><span style="color: var(--accent);">${jwtParts[1]}</span>.<wbr>${jwtParts[2]}`;
         
-        const displayObj = {
-          header,
-          payload,
-          signature: jwtParts[2].substring(0, 20) + '...'
-        };
-        
-        const jsonStr = JSON.stringify(displayObj, null, 2);
-        const highlighted = jsonStr
-          .replace(/"([^"]+)"(\s*:)/g, '<span class="json-key">"$1"</span>$2')
-          .replace(/: "([^"]*)"/g, ': <span class="json-string">"$1"</span>')
-          .replace(/: ({[^}]*})/g, (match) => `: <span class="json-string">${match.substring(2)}</span>`)
-          .replace(/[{}[\]]/g, (match) => `<span class="json-bracket">${match}</span>`);
-
         panel.className = 'output-panel';
         panel.innerHTML = `
-          <div class="output-json">${highlighted}</div>
+          <div class="output-json" style="word-break: break-all;">${highlightedJWT}</div>
           <div class="output-footer">
             <div class="status-dot"></div>
-            <div class="status-text">JWT DECODED</div>
-            <div class="proof-type">JOSE</div>
+            <div class="status-text">JWT ENCODED</div>
+            <div class="proof-type">BASE64URL</div>
           </div>
         `;
         document.getElementById('outputActions').style.display = 'flex';
       }
     }
 
-    function showQRView() {
-      showQR();
+    function showJWTDecodedView() {
+      if (state.currentJWT) {
+        state.currentView = 'jwt-decoded';
+        const panel = document.getElementById('outputPanel');
+        const jwtParts = state.currentJWT.split('.');
+        
+        try {
+          const header = JSON.parse(atob(jwtParts[0]));
+          const payload = JSON.parse(atob(jwtParts[1]));
+          
+          const displayObj = {
+            header,
+            payload,
+            signature: jwtParts[2].substring(0, 32) + '...'
+          };
+          
+          const jsonStr = JSON.stringify(displayObj, null, 2);
+          const highlighted = jsonStr
+            .replace(/"([^"]+)"(\s*:)/g, '<span class="json-key">"$1"</span>$2')
+            .replace(/: "([^"]*)"/g, ': <span class="json-string">"$1"</span>')
+            .replace(/: ({[^}]*})/g, (match) => `: <span class="json-string">${match.substring(2)}</span>`)
+            .replace(/: \[/g, ': <span class="json-bracket">[</span>')
+            .replace(/\]/g, '<span class="json-bracket">]</span>')
+            .replace(/[{}]/g, (match) => `<span class="json-bracket">${match}</span>`);
+
+          panel.className = 'output-panel';
+          panel.innerHTML = `
+            <div class="output-json">${highlighted}</div>
+            <div class="output-footer">
+              <div class="status-dot"></div>
+              <div class="status-text">JWT DECODED</div>
+              <div class="proof-type">JOSE</div>
+            </div>
+          `;
+        } catch (error) {
+          panel.innerHTML = `
+            <div class="state-error">
+              <div class="error-icon">⚠️</div>
+              <div class="error-message">Failed to decode JWT: ${error.message}</div>
+            </div>
+          `;
+        }
+        document.getElementById('outputActions').style.display = 'flex';
+      }
     }
 
     function resetOutput() {
