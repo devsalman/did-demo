@@ -337,8 +337,7 @@
     async function generateQRCode(requestJwt) {
       try {
         // SIOP v2 standard: QR should contain a URI with the request JWT
-        // Use openid:// scheme which wallets recognize
-        const siopUri = `openid://?request=${encodeURIComponent(requestJwt)}`;
+        const siopUri = `siopv2://?request=${encodeURIComponent(requestJwt)}`;
         
         // Encode the URI in QR code
         const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(siopUri)}`;
@@ -358,7 +357,7 @@
       }
 
       // Custom URI scheme for wallet apps
-      const deepLink = `openid-vc://?request=${encodeURIComponent(state.requestJwt)}`;
+      const deepLink = `siopv2://?request=${encodeURIComponent(state.requestJwt)}`;
       
       showStatus(`<span class="loading-spinner"></span> Opening wallet...`, 'info');
       
