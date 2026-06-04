@@ -90,7 +90,7 @@ router.post('/api/auth/siop-request', async (req, res) => {
     // Sign the request object with issuer's private key
     const privateKey = await jose.importJWK(keys.jwk);
     const requestJwt = await new jose.SignJWT(authRequest)
-      .setProtectedHeader({ alg: 'EdDSA', typ: 'JWT', kid: `did:web:identitylab.id#key-1` })
+      .setProtectedHeader({ alg: keys.jwk.alg, typ: 'JWT', kid: `did:web:identitylab.id#key-1` })
       .setIssuedAt()
       .setExpirationTime('15m')
       .sign(privateKey);
