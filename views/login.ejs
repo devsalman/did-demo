@@ -84,17 +84,21 @@
     }
 
     .login-methods {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 30px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 40px;
       margin-bottom: 30px;
     }
 
     .method {
-      padding: 30px 20px;
+      padding: 40px;
       border: 1px solid var(--border);
       background: var(--bg-secondary);
       transition: all 0.3s ease;
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
     }
 
     .method:hover {
@@ -108,7 +112,7 @@
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 1px;
-      margin-bottom: 20px;
+      margin-bottom: 25px;
       color: var(--text-secondary);
     }
 
@@ -116,16 +120,15 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 15px;
-      min-height: 200px;
+      gap: 20px;
       justify-content: center;
     }
 
     .qr-code {
-      width: 140px;
-      height: 140px;
+      width: 280px;
+      height: 280px;
       background: white;
-      padding: 8px;
+      padding: 12px;
       border: 2px solid var(--accent);
       display: flex;
       align-items: center;
@@ -237,8 +240,13 @@
     }
 
     @media (max-width: 600px) {
-      .login-methods {
-        grid-template-columns: 1fr;
+      .method {
+        max-width: 100%;
+      }
+
+      .qr-code {
+        width: 220px;
+        height: 220px;
       }
 
       .header h1 {
@@ -255,9 +263,9 @@
     </div>
 
     <div class="login-methods">
-      <!-- QR Code Method (Cross-device) -->
+      <!-- Combined Login Method -->
       <div class="method">
-        <div class="method-title">📱 Cross Device</div>
+        <div class="method-title">📱 Scan QR Code</div>
         <div class="method-content">
           <div class="qr-code" id="qrCodeContainer">
             <img id="qrImage" src="" alt="QR Code" style="display: none;">
@@ -265,18 +273,18 @@
               Loading QR...
             </div>
           </div>
-          <div class="qr-status">Scan with wallet app</div>
+          <div class="qr-status">Scan with your SIOP v2 wallet app</div>
         </div>
       </div>
 
-      <!-- Same Device Button -->
-      <div class="method">
-        <div class="method-title">🔑 Same Device</div>
+      <!-- Alternative Same Device -->
+      <div class="method" style="max-width: 400px; width: 100%;">
+        <div class="method-title">🔑 Or Launch Wallet Directly</div>
         <div class="method-content">
           <button class="button" id="ssiLoginBtn" onclick="handleSameDeviceLogin()">
             Launch SSI Wallet
           </button>
-          <div class="qr-status" id="sameDeviceStatus">Open your wallet app</div>
+          <div class="qr-status" id="sameDeviceStatus">For same-device authentication</div>
         </div>
       </div>
     </div>
