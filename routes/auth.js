@@ -64,38 +64,26 @@ router.post('/api/auth/siop-request', async (req, res) => {
       expiresAt: Date.now() + 15 * 60 * 1000, // 15 min expiry
     });
 
-    // SIOP v2 Authorization Request (per spec)
+    // SIOPv2 + OID4VP Authorization Request (per spec)
+    // Uses DCQL (Digital Credentials Query Language) instead of legacy presentation_definition
     const authRequest = {
       client_id: 'did:web:identitylab.id',
       redirect_uri: 'https://demo.identitylab.id/auth/callback',
       response_type: 'vp_token id_token',
       response_mode: 'direct_post',
+      scope: 'openid',
+      id_token_type: 'subject_signed',
       nonce,
       state,
-      presentation_definition: {
-        id: 'academic_credential_request',
-        input_descriptors: [
+      dcql_query: {
+        credentials: [
           {
             id: 'academic_credential',
-            name: 'Academic Credential',
-            purpose: 'Prove your academic credentials to login',
-            format: {
-              jwt_vc: {
-                alg: ['EdDSA', 'ES256'],
-              },
-            },
-            constraints: {
-              fields: [
-                {
-                  path: ['$.credentialSubject.degree'],
-                  filter: { type: 'string' },
-                },
-                {
-                  path: ['$.issuer'],
-                  filter: { const: 'did:web:identitylab.id' },
-                },
-              ],
-            },
+            format: 'jwt_vc',
+            claims: [
+              { path: ['credentialSubject', 'degree'] },
+              { path: ['issuer'], values: ['did:web:identitylab.id'] },
+            ],
           },
         ],
       },
@@ -104,7 +92,7 @@ router.post('/api/auth/siop-request', async (req, res) => {
     // Sign the request object with issuer's private key
     const privateKey = await jose.importJWK(keys.jwk);
     const requestJwt = await new jose.SignJWT(authRequest)
-      .setProtectedHeader({ alg: keys.jwk.alg, typ: 'JWT', kid: `did:web:identitylab.id#key-1` })
+      .setProtectedHeader({ alg: keys.jwk.alg, typ: 'oauth-authz-req+jwt', kid: `did:web:identitylab.id#key-1` })
       .setIssuedAt()
       .setExpirationTime('15m')
       .sign(privateKey);
