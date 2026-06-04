@@ -300,7 +300,7 @@
   <script>
     const state = {
       sessionId: null,
-      requestJwt: null,
+      siopUri: null,
     };
 
     // Initialize login on page load
@@ -323,10 +323,10 @@
 
         const data = await response.json();
         state.sessionId = data.sessionId;
-        state.requestJwt = data.requestJwt;
+        state.siopUri = data.siopUri;
 
-        // Generate QR code with SIOP request
-        await generateQRCode(data.requestJwt);
+        // Generate QR code with SIOP URI
+        await generateQRCode(data.siopUri);
         
         clearStatus();
       } catch (error) {
@@ -334,12 +334,9 @@
       }
     }
 
-    async function generateQRCode(requestJwt) {
+    async function generateQRCode(siopUri) {
       try {
-        // SIOP v2 standard: QR should contain a URI with the request JWT
-        const siopUri = `siopv2://?request=${encodeURIComponent(requestJwt)}`;
-        
-        // Encode the URI in QR code
+        // Encode the SIOP URI in QR code
         const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(siopUri)}`;
         const qrImg = document.getElementById('qrImage');
         qrImg.src = qrUrl;
@@ -351,13 +348,13 @@
     }
 
     function handleSameDeviceLogin() {
-      if (!state.requestJwt) {
-        showStatus('SIOP request not ready', 'error');
+      if (!state.siopUri) {
+        showStatus('SIOP URI not ready', 'error');
         return;
       }
 
       // Custom URI scheme for wallet apps
-      const deepLink = `siopv2://?request=${encodeURIComponent(state.requestJwt)}`;
+      const deepLink = state.siopUri;
       
       showStatus(`<span class="loading-spinner"></span> Opening wallet...`, 'info');
       

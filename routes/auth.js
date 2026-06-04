@@ -30,6 +30,20 @@ try {
 
 // In-memory session store (use Redis/DB in production)
 const sessions = new Map();
+const requestObjects = new Map(); // Store request JWTs for request_uri method
+
+// SIOP Request Object endpoint - hosts the signed JWT
+router.get('/api/auth/request/:sessionId', (req, res) => {
+  const { sessionId } = req.params;
+  const requestJwt = requestObjects.get(sessionId);
+  
+  if (!requestJwt) {
+    return res.status(404).json({ error: 'Request not found' });
+  }
+  
+  res.setHeader('Content-Type', 'application/oauth-authz-req+jwt');
+  res.send(requestJwt);
+});
 
 // SIOP Request Object endpoint
 router.post('/api/auth/siop-request', async (req, res) => {
@@ -50,7 +64,7 @@ router.post('/api/auth/siop-request', async (req, res) => {
       expiresAt: Date.now() + 15 * 60 * 1000, // 15 min expiry
     });
 
-    // SIOP v2 Authorization Request
+    // SIOP v2 Authorization Request (per spec)
     const authRequest = {
       client_id: 'did:web:identitylab.id',
       redirect_uri: 'https://demo.identitylab.id/auth/callback',
@@ -95,10 +109,18 @@ router.post('/api/auth/siop-request', async (req, res) => {
       .setExpirationTime('15m')
       .sign(privateKey);
 
+    // Store the request JWT for request_uri method
+    requestObjects.set(sessionId, requestJwt);
+
+    // SIOP v2 spec: use request_uri method (not embedding JWT in QR)
+    const requestUri = `https://demo.identitylab.id/api/auth/request/${sessionId}`;
+    const siopUri = `siopv2://?client_id=${encodeURIComponent('did:web:identitylab.id')}&request_uri=${encodeURIComponent(requestUri)}`;
+
     res.json({
       sessionId,
-      requestJwt,
-      authRequest, // Also return decoded for debugging
+      siopUri,
+      requestUri,
+      requestJwt, // Also return for debugging
     });
   } catch (error) {
     console.error('SIOP Request Error:', error);
