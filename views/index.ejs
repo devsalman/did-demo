@@ -58,17 +58,17 @@
       <div class="output-header">
         <span class="output-label">Output</span>
         <div class="output-actions" id="outputActions" style="display: none;">
-          <button class="output-action" onclick="copyJSON()">
+          <button class="output-action" onclick="showCredentialView()">
+            <span>📄</span> JSON
+          </button>
+          <button class="output-action" onclick="showJWTView()">
+            <span>🔐</span> JWT
+          </button>
+          <button class="output-action" onclick="showQRView()">
+            <span>📱</span> QR
+          </button>
+          <button class="output-action" onclick="copyCurrentOutput()">
             <span id="copyIcon">📋</span> Copy
-          </button>
-          <button class="output-action" onclick="showSuccessState(state.currentVC)">
-            <span id="qrIcon">📋</span> JSON
-          </button>
-          <button class="output-action" onclick="showSuccessState(state.currentJWT)">
-            <span id="qrIcon">📋</span> JWT
-          </button>
-          <button class="output-action" onclick="showQR()">
-            <span id="qrIcon">📋</span> QR
           </button>
           <button class="output-action" onclick="resetOutput()">
             Reset
@@ -94,6 +94,7 @@
       claims: [{ key: '', value: '' }],
       currentVC: null,
       currentJWT: null,
+      currentView: 'json',
       isCreating: false,
     };
 
@@ -181,6 +182,7 @@
         if (response.ok) {
           state.currentVC = result.data.credential;
           state.currentJWT = result.data.jwt;
+          state.currentView = 'json';
           showSuccessState(state.currentVC);
         } else {
           showErrorState(result.error);
@@ -242,10 +244,14 @@
 
     function showQR() {
       const panel = document.getElementById('outputPanel');
+      if (!state.currentJWT) {
+        panel.innerHTML = `<div class="state-error"><div class="error-message">No JWT available</div></div>`;
+        return;
+      }
       panel.className = 'output-panel qr';
       panel.innerHTML = `
-          <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(state.currentJWT)}" alt="QR Code" />
-        `;
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(state.currentJWT)}" alt="QR Code" style="max-width: 100%; border-radius: 4px;" />
+      `;
       document.getElementById('outputActions').style.display = 'flex';
     }
 
@@ -253,26 +259,78 @@
       const panel = document.getElementById('outputPanel');
       panel.className = 'output-panel';
       panel.innerHTML = `
-          <div class="state-error">
-            <div class="error-icon">⚠️</div>
-            <div class="error-message">${error}</div>
-            <button class="error-retry" onclick="createVC()">Try again</button>
-          </div>
-        `;
+        <div class="state-error">
+          <div class="error-icon">⚠️</div>
+          <div class="error-message">${error}</div>
+          <button class="error-retry" onclick="createVC()">Try again</button>
+        </div>
+      `;
       document.getElementById('outputActions').style.display = 'none';
     }
 
-    function copyJSON() {
-      const json = JSON.stringify(state.currentVC, null, 2);
-      navigator.clipboard.writeText(json).then(() => {
+    function copyCurrentOutput() {
+      let textToCopy = '';
+      if (state.currentVC && state.currentView === 'json') {
+        textToCopy = JSON.stringify(state.currentVC, null, 2);
+      } else if (state.currentJWT && state.currentView === 'jwt') {
+        textToCopy = state.currentJWT;
+      } else {
+        return;
+      }
+
+      navigator.clipboard.writeText(textToCopy).then(() => {
         const btn = event.target.closest('.output-action');
-        const icon = btn.querySelector('#copyIcon');
-        const text = btn.textContent;
+        const icon = btn.querySelector('span:first-child');
         btn.innerHTML = '<span>✓</span> Copied';
         setTimeout(() => {
-          btn.innerHTML = '<span>📋</span> Copy JSON';
+          btn.innerHTML = '<span>📋</span> Copy';
         }, 2000);
-      });
+      }).catch(err => console.error('Copy failed:', err));
+    }
+
+    function showCredentialView() {
+      if (state.currentVC) {
+        state.currentView = 'json';
+        showSuccessState(state.currentVC);
+      }
+    }
+
+    function showJWTView() {
+      if (state.currentJWT) {
+        state.currentView = 'jwt';
+        const panel = document.getElementById('outputPanel');
+        const jwtParts = state.currentJWT.split('.');
+        const header = JSON.parse(atob(jwtParts[0]));
+        const payload = JSON.parse(atob(jwtParts[1]));
+        
+        const displayObj = {
+          header,
+          payload,
+          signature: jwtParts[2].substring(0, 20) + '...'
+        };
+        
+        const jsonStr = JSON.stringify(displayObj, null, 2);
+        const highlighted = jsonStr
+          .replace(/"([^"]+)"(\s*:)/g, '<span class="json-key">"$1"</span>$2')
+          .replace(/: "([^"]*)"/g, ': <span class="json-string">"$1"</span>')
+          .replace(/: ({[^}]*})/g, (match) => `: <span class="json-string">${match.substring(2)}</span>`)
+          .replace(/[{}[\]]/g, (match) => `<span class="json-bracket">${match}</span>`);
+
+        panel.className = 'output-panel';
+        panel.innerHTML = `
+          <div class="output-json">${highlighted}</div>
+          <div class="output-footer">
+            <div class="status-dot"></div>
+            <div class="status-text">JWT DECODED</div>
+            <div class="proof-type">JOSE</div>
+          </div>
+        `;
+        document.getElementById('outputActions').style.display = 'flex';
+      }
+    }
+
+    function showQRView() {
+      showQR();
     }
 
     function resetOutput() {
