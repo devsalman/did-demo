@@ -125,24 +125,27 @@
     }
 
     .qr-code {
-      width: 280px;
-      height: 280px;
+      width: 240px;
+      height: 240px;
       background: white;
-      padding: 12px;
+      padding: 8px;
       border: 2px solid var(--accent);
       display: flex;
       align-items: center;
       justify-content: center;
+      margin: 0 auto 12px;
+      box-sizing: border-box;
     }
 
     .qr-code img {
-      width: 100%;
-      height: 100%;
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
       image-rendering: pixelated;
     }
 
     .qr-status {
-      font-size: 11px;
+      font-size: 12px;
       color: var(--text-secondary);
       text-align: center;
     }
@@ -336,9 +339,13 @@
 
     async function generateQRCode(siopUri) {
       try {
-        // Encode the SIOP URI in QR code
         const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(siopUri)}`;
         const qrImg = document.getElementById('qrImage');
+        qrImg.onload = () => {
+          const container = document.getElementById('qrCodeContainer');
+          const loadingDiv = container.querySelector('div');
+          if (loadingDiv) loadingDiv.style.display = 'none';
+        };
         qrImg.src = qrUrl;
         qrImg.style.display = 'block';
       } catch (error) {

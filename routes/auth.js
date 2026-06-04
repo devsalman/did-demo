@@ -114,7 +114,7 @@ router.post('/api/auth/siop-request', async (req, res) => {
 
     // SIOP v2 spec: use request_uri method (not embedding JWT in QR)
     const requestUri = `https://demo.identitylab.id/api/auth/request/${sessionId}`;
-    const siopUri = `siopv2://?client_id=${encodeURIComponent('did:web:identitylab.id')}&request_uri=${encodeURIComponent(requestUri)}`;
+    const siopUri = `siopv2://?client_id=${encodeURIComponent('did:web:identitylab.id')}&request_uri=${encodeURIComponent(requestUri)}&nonce=${encodeURIComponent(nonce)}`;
 
     res.json({
       sessionId,
