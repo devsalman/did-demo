@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - Identity Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-primary: #080808;
+      --bg-secondary: #0f0f0f;
+      --text-primary: #e8e8e2;
+      --text-secondary: #a8a8a0;
+      --accent: #00ff88;
+      --border: #1a1a1a;
+      --success: #00ff88;
+    }
+
+    body {
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: 'JetBrains Mono', monospace;
+      line-height: 1.6;
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 30px;
+      margin-bottom: 40px;
+    }
+
+    .header h1 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 32px;
+      font-weight: 600;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 8px;
+    }
+
+    .header p {
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border: 1px solid var(--success);
+      color: var(--success);
+      font-size: 12px;
+      margin-top: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .section {
+      border: 1px solid var(--border);
+      padding: 20px;
+      margin-bottom: 20px;
+      background: var(--bg-secondary);
+    }
+
+    .section-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-secondary);
+      margin-bottom: 15px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      font-size: 13px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .info-row:last-child {
+      border-bottom: none;
+    }
+
+    .label {
+      color: var(--text-secondary);
+    }
+
+    .value {
+      color: var(--accent);
+      font-weight: 500;
+      word-break: break-all;
+    }
+
+    .button {
+      padding: 10px 20px;
+      border: 1px solid var(--accent);
+      background: transparent;
+      color: var(--accent);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-top: 15px;
+    }
+
+    .button:hover {
+      background: var(--accent);
+      color: var(--bg-primary);
+    }
+
+    .error {
+      border: 1px solid #ff4444;
+      padding: 15px;
+      background: rgba(255, 68, 68, 0.05);
+      color: #ff4444;
+      margin-bottom: 20px;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: var(--text-secondary);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>✓ Authenticated</h1>
+      <p>SIOP v2 Login Successful</p>
+      <div class="status-badge">VERIFIED WITH SSI</div>
+    </div>
+
+    <div id="content"></div>
+
+    <button class="button" onclick="logout()">Logout</button>
+  </div>
+
+  <script>
+    const sessionToken = new URLSearchParams(window.location.search).get('session');
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (!sessionToken) {
+        showError('No session token provided');
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/auth/verify?token=${sessionToken}`);
+        const data = await response.json();
+
+        if (!data.authenticated) {
+          showError('Session expired or invalid');
+          return;
+        }
+
+        displayUserInfo(data.user);
+      } catch (error) {
+        showError(`Error: ${error.message}`);
+      }
+    });
+
+    function displayUserInfo(user) {
+      const content = document.getElementById('content');
+      const html = `
+        <div class="section">
+          <div class="section-title">👤 User Information</div>
+          <div class="info-row">
+            <span class="label">Name:</span>
+            <span class="value">${user.name || 'Unknown'}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">DID:</span>
+            <span class="value">${user.did}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Degree:</span>
+            <span class="value">${user.degree || 'N/A'}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Institution:</span>
+            <span class="value">${user.institution || 'N/A'}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Authenticated:</span>
+            <span class="value">${new Date(user.authenticatedAt).toLocaleString()}</span>
+          </div>
+        </div>
+      `;
+      content.innerHTML = html;
+    }
+
+    function showError(message) {
+      const content = document.getElementById('content');
+      content.innerHTML = `<div class="error">${message}</div>`;
+    }
+
+    function logout() {
+      window.location.href = '/login';
+    }
+  </script>
+</body>
+</html>

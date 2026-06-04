@@ -2,6 +2,7 @@ import express from 'express';
 import { generateKeyPairSync, randomBytes } from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import apiRoutes from './routes/api.js';
+import authRoutes from './routes/auth.js';
 import frontendRoutes from './routes/frontend.js';
 
 const app = express();
@@ -18,11 +19,14 @@ app.use(express.static('public'));
 
 // Application Routes
 app.use('/', frontendRoutes);
+app.use('/', authRoutes);
 app.use('/api/', apiRoutes);
 
 // Start server
 app.listen(PORT, () => {
   console.log(`\n✅ SSI VC Issuer running on http://localhost:${PORT}`);
   console.log(`🔑 Issuer DID: did:web:identitylab.id`);
-  console.log(`📄 Open browser: http://localhost:${PORT}\n`);
+  console.log(`📄 VC Demo: http://localhost:${PORT}`);
+  console.log(`🔐 SIOP Login: http://localhost:${PORT}/login\n`);
 });
+
