@@ -258,6 +258,11 @@
       document.getElementById('outputActions').style.display = 'flex';
     }
 
+    function showQRView() {
+      state.currentView = 'qr';
+      showQR();
+    }
+
     function showErrorState(error) {
       const panel = document.getElementById('outputPanel');
       panel.className = 'output-panel';
