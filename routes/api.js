@@ -72,11 +72,14 @@ router.post('/vc/create', async (req, res) => {
       .setProtectedHeader({ alg: keys.jwk.alg, iss: keys.did.id, kid: keys.jwk.kid })
       .sign(privateKey);
 
+    // Ensure JWT is clean (no URLs, just the token)
+    const cleanJwt = signedJwt.trim();
+
     res.json({
       success: true,
       data: {
         credential: credential,
-        jwt: signedJwt
+        jwt: cleanJwt
       }
     });
   } catch (error) {
