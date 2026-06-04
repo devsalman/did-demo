@@ -336,7 +336,12 @@
 
     async function generateQRCode(requestJwt) {
       try {
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(requestJwt)}`;
+        // SIOP v2 standard: QR should contain a URI with the request JWT
+        // Use openid:// scheme which wallets recognize
+        const siopUri = `openid://?request=${encodeURIComponent(requestJwt)}`;
+        
+        // Encode the URI in QR code
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(siopUri)}`;
         const qrImg = document.getElementById('qrImage');
         qrImg.src = qrUrl;
         qrImg.style.display = 'block';
