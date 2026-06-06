@@ -212,12 +212,14 @@ async function verifyCredentialJwt(jwt) {
 }
 
 async function handleCallback(vp_token, state, res) {
+  let session;
+
   try {
     if (!vp_token || !state) {
       return res.status(400).json({ error: 'Missing vp_token or state' });
     }
 
-    const session = sessions.get(state);
+    session = sessions.get(state);
     if (!session || session.expiresAt < Date.now()) {
       return res.status(401).json({ error: 'Invalid or expired session' });
     }
@@ -288,7 +290,19 @@ async function handleCallback(vp_token, state, res) {
     });
   } catch (error) {
     console.error('Callback Error:', error);
-    res.status(500).json({ error: error.message });
+
+    if (session && session.sessionId) {
+      sessions.set(session.sessionId, {
+        authenticated: false,
+        error: error.message,
+        verifiedAt: new Date().toISOString(),
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
   }
 }
 
@@ -302,24 +316,31 @@ router.get('/api/auth/verify', (req, res) => {
   const sessionToken = req.query.token;
 
   if (!sessionToken) {
-    return res.status(401).json({ authenticated: false });
+    return res.json({ authenticated: false });
   }
 
   const session = sessions.get(sessionToken);
-  if (!session || !session.authenticated) {
-    return res.status(401).json({ authenticated: false });
+  if (!session) {
+    return res.json({ authenticated: false });
+  }
+
+  if (session.authenticated) {
+    return res.json({
+      authenticated: true,
+      user: {
+        did: session.did,
+        name: session.name,
+        role: session.role,
+        idNumber: session.idNumber,
+        faculty: session.faculty,
+        authenticatedAt: session.authenticatedAt,
+      },
+    });
   }
 
   res.json({
-    authenticated: true,
-    user: {
-      did: session.did,
-      name: session.name,
-      role: session.role,
-      idNumber: session.idNumber,
-      faculty: session.faculty,
-      authenticatedAt: session.authenticatedAt,
-    },
+    authenticated: false,
+    error: session.error || null,
   });
 });
 
