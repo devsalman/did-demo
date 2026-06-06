@@ -69,7 +69,8 @@ router.post('/vc/create', async (req, res) => {
     // Sign the credential using JWS
     const privateKey = await jose.importJWK(keys.jwk);
     const signedJwt = await new jose.SignJWT(credential)
-      .setProtectedHeader({ alg: keys.jwk.alg, iss: keys.did.id, kid: keys.jwk.kid })
+      .setProtectedHeader({ alg: keys.jwk.alg, kid: keys.jwk.kid })
+      .setIssuer(keys.did.id)
       .sign(privateKey);
 
     // Ensure JWT is clean (no URLs, just the token)

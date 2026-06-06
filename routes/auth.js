@@ -4,6 +4,10 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { v4 as uuidv4 } from 'uuid';
+import { Resolver } from 'did-resolver';
+import { getResolver as getWebResolver } from 'web-did-resolver';
+import { getResolver as getKeyResolver } from 'key-did-resolver';
+import bs58 from 'bs58';
 
 const router = express.Router();
 
@@ -29,6 +33,26 @@ try {
   keys = loadKeys();
 } catch (error) {
   console.error(`Warning: ${error.message}`);
+}
+
+let didResolver;
+
+try {
+  const { getResolver: getEthrResolver } = await import('ethr-did-resolver');
+  didResolver = new Resolver({
+    ...getWebResolver(),
+    ...getKeyResolver(),
+    ...getEthrResolver({
+      networks: [{ name: 'mainnet', rpcUrl: 'https://eth.drpc.org' }],
+    }),
+  });
+  console.log('DID resolver initialized (web + key + ethr)');
+} catch (e) {
+  didResolver = new Resolver({
+    ...getWebResolver(),
+    ...getKeyResolver(),
+  });
+  console.log('DID resolver initialized (web + key, ethr unavailable:', e.message + ')');
 }
 
 const sessions = new Map();
@@ -139,6 +163,54 @@ router.post('/api/auth/openid4vp-request', async (req, res) => {
   }
 });
 
+async function verifyCredentialJwt(jwt) {
+  const protectedHeader = jose.decodeProtectedHeader(jwt);
+  const payload = jose.decodeJwt(jwt);
+  const issuer = payload.iss || payload.issuer;
+  const kid = protectedHeader.kid;
+
+  let resolution;
+  try {
+    resolution = await didResolver.resolve(issuer);
+  } catch (resolveError) {
+    throw new Error(`DID resolution failed for ${issuer}: ${resolveError.message}`);
+  }
+
+  const didDoc = resolution.didDocument;
+
+  if (!didDoc || !didDoc.verificationMethod) {
+    throw new Error(`No verification methods in DID document for ${issuer}`);
+  }
+
+  let vm;
+  if (kid) {
+    vm = didDoc.verificationMethod.find(
+      m => m.id === kid || m.id.endsWith('#' + kid)
+    );
+  }
+  if (!vm) {
+    vm = didDoc.verificationMethod[0];
+  }
+
+  let publicKey;
+  if (vm.publicKeyJwk) {
+    publicKey = await jose.importJWK(vm.publicKeyJwk);
+  } else if (vm.publicKeyBase58) {
+    const rawKey = bs58.decode(vm.publicKeyBase58);
+    const jwk = {
+      kty: 'OKP',
+      crv: 'Ed25519',
+      x: Buffer.from(rawKey).toString('base64url'),
+    };
+    publicKey = await jose.importJWK(jwk);
+  } else {
+    throw new Error(`Unsupported key format for ${vm.id}`);
+  }
+
+  await jose.jwtVerify(jwt, publicKey);
+  return payload;
+}
+
 async function handleCallback(vp_token, state, res) {
   try {
     if (!vp_token || !state) {
@@ -170,7 +242,7 @@ async function handleCallback(vp_token, state, res) {
       if (Array.isArray(presentations) && presentations.length > 0) {
         const credJwt = presentations[0];
         if (typeof credJwt === 'string') {
-          const credDecoded = jose.decodeJwt(credJwt);
+          const credDecoded = await verifyCredentialJwt(credJwt);
           credential = credDecoded;
           credentialSubject = credDecoded?.credentialSubject || null;
         } else if (typeof credJwt === 'object') {

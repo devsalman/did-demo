@@ -393,13 +393,13 @@
             if (data.authenticated) {
               showStatus(`✓ Welcome ${data.user.name || data.user.did}!`, 'success');
               setTimeout(() => {
-                window.location.href = '/credential?session=' + state.sessionId;
+                window.location.href = '/dashboard?session=' + state.sessionId;
               }, 1500);
             }
           })
           .catch(() => {}); // Silent - polling only
       }
-    }, 2000);
+    }, 5000);
   </script>
 </body>
 </html>
