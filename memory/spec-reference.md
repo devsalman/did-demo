@@ -1,372 +1,350 @@
-# SIOPv2 + OID4VP Spec Reference
+# OID4VP (OpenID for Verifiable Presentations 1.0) — Complete Spec Reference
 
-## SIOPv2 Spec
-- https://openid.net/specs/openid-connect-self-issued-v2-1_0.html (draft 13)
-
-## OID4VP Spec
-- https://openid.net/specs/openid-4-verifiable-presentations-1_0.html (Final, July 2025)
+Source: https://openid.net/specs/openid-4-verifiable-presentations-1_0.html (Final, July 2025)
 
 ---
 
-# DCQL (Digital Credentials Query Language) — Complete Reference
+## Overview
 
-DCQL (pronounced "dackl") is a JSON-encoded query language for requesting Verifiable Credentials.
+OID4VP is a protocol on top of OAuth 2.0 for requesting and presenting W3C Verifiable Credentials, ISO mdocs, SD-JWT VCs, etc. It introduces:
 
-## Top-Level Properties
+- **DCQL** — Digital Credentials Query Language for expressing credential requirements
+- **`vp_token`** — new response type for returning presentations
+- **`direct_post`** — new response mode for cross-device / large responses
+- **Client Identifier Prefix** — mechanism to identify and verify Verifiers via `client_id` prefix
 
-| Property | Req | Description |
+---
+
+## 1. Two Flows
+
+### 1.1 Same-Device Flow
+
+Wallet and Verifier on the same device. Simple redirects.
+
+```
+End-User → Verifier → (1) Auth Req w/ DCQL → Wallet
+                     → (2) Auth Response w/ vp_token → Verifier
+```
+
+Response Mode defaults to `fragment`.
+
+### 1.2 Cross-Device Flow (OUR USE CASE)
+
+Wallet and Verifier on different devices. QR code + `direct_post`.
+
+```
+End-User     Verifier (device A)                            Wallet (device B)
+   |               |                                              |
+   |  Interacts    |                                              |
+   |──────────────>|                                              |
+   |               |  (1) Auth Request (QR: client_id + request_uri)
+   |               |─────────────────────────────────────────────>|
+   |               |                                              |
+   |               |  (2) GET request_uri → fetch Request Object  |
+   |               |<─────────────────────────────────────────────|
+   |               |                                              |
+   |               |  (2.5) Respond with Request Object (DCQL)    |
+   |               |─────────────────────────────────────────────>|
+   |               |                                              |
+   |               |  End-User Auth / Consent                     |
+   |               |                                              |
+   |               |  (3) HTTP POST to response_uri               |
+   |               |      (vp_token with Presentation(s))         |
+   |               |<─────────────────────────────────────────────|
+```
+
+**Step details:**
+1. Verifier renders QR with minimal params: `client_id` + `request_uri`
+2. Wallet scans QR, GETs the `request_uri` to retrieve the signed Request Object (JWT)
+2.5 Request Object contains full Authorization Request: DCQL query, `response_type=vp_token`, `response_mode=direct_post`, `nonce`, `state`, `response_uri`
+3. Wallet presents credentials via HTTP POST to `response_uri` with `vp_token` in body
+
+---
+
+## 2. Authorization Request
+
+### 2.1 Core Parameters
+
+| Parameter | Status | Description |
 |---|---|---|
-| `credentials` | REQUIRED | Non-empty array of Credential Queries |
-| `credential_sets` | OPTIONAL | Array of Credential Set Queries for OR/optional logic |
+| `response_type` | REQUIRED | `vp_token` (pure OID4VP) or `vp_token id_token` (combined w/ SIOPv2) |
+| `client_id` | REQUIRED | With prefix (e.g. `redirect_uri:https://...`, `did:web:...`, `verifier_attestation:...`) |
+| `response_mode` | REQUIRED | `direct_post` for cross-device |
+| `response_uri` | REQUIRED (w/ direct_post) | URL that receives the POST with vp_token |
+| `dcql_query` | REQUIRED (mutual exclusive with scope) | DCQL JSON object |
+| `nonce` | REQUIRED | Fresh cryptographically random value, bound to session |
+| `state` | OPTIONAL | OAuth state, used to correlate request ↔ response |
+| `request_uri` | OPTIONAL (for JAR) | URL where the signed Request Object JWT is hosted |
+| `client_metadata` | OPTIONAL | Verifier metadata: `vp_formats_supported`, `jwks` |
 
----
+### 2.2 Request Object (JAR)
 
-## 1. Credential Query — `credentials[]` (Section 6.1)
+The full Authorization Request is packaged as a **signed JWT** (Request Object) per RFC9101.
 
-Each entry is an object requesting one type of Credential:
-
-| Property | Req | Description |
-|---|---|---|
-| `id` | REQUIRED | Unique identifier for this credential query (alphanumeric, `_`, `-`) |
-| `format` | REQUIRED | Credential format identifier (e.g., `jwt_vc`, `dc+sd-jwt`, `mso_mdoc`) |
-| `multiple` | OPTIONAL | Boolean: allow multiple matching VCs? Default: `false` |
-| `meta` | REQUIRED | Format-specific metadata constraints (e.g., `vct_values`, `doctype_value`) |
-| `trusted_authorities` | OPTIONAL | Array of trusted issuer/trust framework constraints |
-| `require_cryptographic_holder_binding` | OPTIONAL | Boolean. Default: `true` |
-| `claims` | OPTIONAL | Array of Claim Queries specifying which claims to request |
-| `claim_sets` | OPTIONAL | Array of claim ID combinations for selective disclosure |
-
-### Supported Format Identifiers (Appendix B)
-
-| Format ID | Description |
-|---|---|
-| `jwt_vc` | W3C Verifiable Credential as JWT |
-| `jwt_vp` | W3C Verifiable Presentation as JWT |
-| `dc+sd-jwt` | IETF SD-JWT VC |
-| `mso_mdoc` | ISO/IEC 18013-5 mdoc |
-
-### Format-specific `meta` Parameters
-
-**For `dc+sd-jwt` (SD-JWT VC):**
-```json
-"meta": {
-  "vct_values": ["https://credentials.example.com/identity_credential"]
-}
-```
-
-**For `mso_mdoc` (ISO mdoc):**
-```json
-"meta": {
-  "doctype_value": "org.iso.18013.5.1.mDL"
-}
-```
-
-**For `jwt_vc` (W3C VC as JWT):**
-```json
-"meta": {}
-```
-
----
-
-## 2. Claims Query — `claims[]` (Section 6.3)
-
-| Property | Req | Description |
-|---|---|---|
-| `id` | REQUIRED (if `claim_sets` present) | Identifier for referencing in `claim_sets` |
-| `path` | REQUIRED | Array path pointer to the claim in the VC |
-| `values` | OPTIONAL | Array of expected values for value matching |
-
-### Path Pointer Examples (Section 7.3)
-
-```json
-["name"]                        // Top-level claim "name"
-["address", "street_address"]   // Nested claim
-["degrees", null, "type"]       // All "type" claims in degrees array
-["nationalities", 1]            // Second element in array
-["credentialSubject", "degree"] // VC data model path
-["issuer"]                      // Issuer field
-```
-
-### Value Matching
-
-```json
-// Exact match
-{ "path": ["issuer"], "values": ["did:web:identitylab.id"] }
-
-// Multiple allowed values
-{ "path": ["credentialSubject", "status"], "values": ["student", "alumni"] }
-```
-
----
-
-## 3. `claim_sets` — Selective Disclosure Alternatives (Section 6.4.1)
-
-Request one combination. Order expresses preference.
-
-```json
-{
-  "claims": [
-    { "id": "full_dob", "path": ["credentialSubject", "dateOfBirth"] },
-    { "id": "over_18", "path": ["credentialSubject", "ageOver18"] },
-    { "id": "over_21", "path": ["credentialSubject", "ageOver21"] }
-  ],
-  "claim_sets": [
-    ["over_18"],    // preferred: just "over 18"
-    ["over_21"],    // fallback: just "over 21"
-    ["full_dob"]    // last resort: full date of birth
-  ]
-}
-```
-
----
-
-## 4. `trusted_authorities` — Trust Framework Constraints (Section 6.1.1)
-
-| Type | Description | Example |
-|---|---|---|
-| `aki` | Authority Key Identifier (X.509) | `{"type": "aki", "values": ["s9tIpPmhxdiuNkHMEWNpYim8S8Y"]}` |
-| `etsi_tl` | ETSI Trusted List URL | `{"type": "etsi_tl", "values": ["https://lotl.example.com"]}` |
-| `openid_federation` | OpenID Federation Trust Anchor | `{"type": "openid_federation", "values": ["https://trustanchor.example.com"]}` |
-
-Usage:
-```json
-{
-  "credentials": [{
-    "id": "eu_driver_license",
-    "format": "mso_mdoc",
-    "meta": { "doctype_value": "org.iso.18013.5.1.mDL" },
-    "trusted_authorities": [
-      { "type": "etsi_tl", "values": ["https://eu-tl.example.com"] }
-    ]
-  }]
-}
-```
-
----
-
-## 5. `credential_sets` — OR / Optional VC Logic (Section 6.2)
-
-| Property | Req | Description |
-|---|---|---|
-| `options` | REQUIRED | Array of arrays, each referencing `id`s from `credentials` |
-| `required` | OPTIONAL | Boolean. Default: `true` |
-
-### OR — one of several credential types
-
-```json
-{
-  "credentials": [
-    { "id": "pid", "format": "dc+sd-jwt", "meta": { "vct_values": ["..."] }, "claims": [...] },
-    { "id": "other_pid", "format": "dc+sd-jwt", "meta": { ... }, "claims": [...] },
-    { "id": "pid_reduced_1", ... },
-    { "id": "pid_reduced_2", ... }
-  ],
-  "credential_sets": [
-    { "options": [
-        ["pid"],
-        ["other_pid"],
-        ["pid_reduced_1", "pid_reduced_2"]
-    ]}
-  ]
-}
-```
-
-### Optional (nice-to-have) credential
-
-```json
-{
-  "credential_sets": [
-    { "required": false, "options": [ ["nice_to_have"] ] }
-  ]
-}
-```
-
----
-
-## 6. `multiple` — Allow Multiple VCs of Same Type (Section 6.1)
-
-```json
-{
-  "credentials": [{
-    "id": "degrees",
-    "format": "jwt_vc",
-    "multiple": true,
-    "meta": {},
-    "claims": [
-      { "path": ["credentialSubject", "degree"] }
-    ]
-  }]
-}
-```
-
----
-
-## 7. Combined SIOPv2 + OID4VP (Appendix C)
-
-### Request
-```
-response_type=vp_token id_token
-scope=openid
-id_token_type=subject_signed
-client_id=x509_san_dns:client.example.org
-redirect_uri=https://client.example.org/cb
-dcql_query={...}
-nonce=n-0S6_WzA2Mj
-```
-
-### Self-Issued ID Token response
-```json
-{
-  "iss": "did:example:NzbLsXh8uDCcd6MNwXF4W7noWXFZAfHkxZsRGC9Xs",
-  "sub": "did:example:NzbLsXh8uDCcd6MNwXF4W7noWXFZAfHkxZsRGC9Xs",
-  "aud": "x509_san_dns:client.example.org",
-  "nonce": "n-0S6_WzA2Mj",
-  "exp": 1311281970,
-  "iat": 1311280970
-}
-```
-
----
-
-## 8. Examples
-
-### Basic — single VC with claims (§5.4)
-
-```json
-{
-  "credentials": [{
-    "id": "some_identity_credential",
-    "format": "dc+sd-jwt",
-    "meta": {
-      "vct_values": ["https://credentials.example.com/identity_credential"]
-    },
-    "claims": [
-      {"path": ["last_name"]},
-      {"path": ["first_name"]}
-    ]
-  }]
-}
-```
-
-### Multiple VCs (Appendix D)
-
-```json
-{
-  "credentials": [
-    {
-      "id": "pid",
-      "format": "dc+sd-jwt",
-      "meta": { "vct_values": ["https://credentials.example.com/identity_credential"] },
-      "claims": [
-        {"path": ["given_name"]},
-        {"path": ["family_name"]},
-        {"path": ["address", "street_address"]}
-      ]
-    },
-    {
-      "id": "mdl",
-      "format": "mso_mdoc",
-      "meta": { "doctype_value": "org.iso.7367.1.mVRC" },
-      "claims": [
-        {"path": ["org.iso.7367.1", "vehicle_holder"]},
-        {"path": ["org.iso.18013.5.1", "first_name"]}
-      ]
-    }
-  ]
-}
-```
-
-### Complex OR + optional (Appendix D)
-
-```json
-{
-  "credentials": [
-    { "id": "pid", "format": "dc+sd-jwt", "meta": { "vct_values": ["..."] }, "claims": [...] },
-    { "id": "other_pid", "format": "dc+sd-jwt", "meta": { ... }, "claims": [...] },
-    { "id": "pid_reduced_cred_1", ... },
-    { "id": "pid_reduced_cred_2", ... },
-    { "id": "nice_to_have", ... }
-  ],
-  "credential_sets": [
-    { "options": [ ["pid"], ["other_pid"], ["pid_reduced_cred_1", "pid_reduced_cred_2"] ] },
-    { "required": false, "options": [ ["nice_to_have"] ] }
-  ]
-}
-```
-
-### mDL or PhotoID for ID + address (Appendix D)
-
-```json
-{
-  "credentials": [
-    { "id": "mdl-id", "format": "mso_mdoc", "meta": { "doctype_value": "org.iso.18013.5.1.mDL" }, "claims": [...] },
-    { "id": "mdl-address", "format": "mso_mdoc", "meta": { "doctype_value": "org.iso.18013.5.1.mDL" }, "claims": [...] },
-    { "id": "photo_card-id", "format": "mso_mdoc", "meta": { "doctype_value": "org.iso.23220.photoid.1" }, "claims": [...] },
-    { "id": "photo_card-address", "format": "mso_mdoc", "meta": { "doctype_value": "org.iso.23220.photoid.1" }, "claims": [...] }
-  ],
-  "credential_sets": [
-    { "options": [ ["mdl-id"], ["photo_card-id"] ] },
-    { "required": false, "options": [ ["mdl-address"], ["photo_card-address"] ] }
-  ]
-}
-```
-
-### Current project implementation
-
-```json
-{
-  "credentials": [{
-    "id": "academic_credential",
-    "format": "jwt_vc",
-    "claims": [
-      { "path": ["credentialSubject", "degree"] },
-      { "path": ["issuer"], "values": ["did:web:identitylab.id"] }
-    ]
-  }]
-}
-```
-
----
-
-## 9. Cross-Device SIOPv2 Request (SIOPv2 §9.2)
-
-```
-siopv2://?
-  scope=openid%20profile
-  &response_type=id_token
-  &client_id=https%3A%2F%2Fclient.example.org%2Fpost_cb
-  &redirect_uri=https%3A%2F%2Fclient.example.org%2Fpost_cb
-  &response_mode=post
-  &client_metadata=%7B%22subject_syntax_types_supported%22%3A
-  %5B%22urn%3Aietf%3Aparams%3Aoauth%3Ajwk-thumbprint%22%5D%2C%0A%20%20%20%20
-  %22id_token_signed_response_alg%22%3A%22ES256%22%7D
-  &nonce=n-0S6_WzA2Mj
-```
-
-## 10. Cross-Device with request_uri method (SIOPv2 §9.2)
-
-```
-siopv2://?
-  client_id=https%3A%2F%2Fclient.example.org%2Fcb
-  &request_uri=https%3A%2F%2Fclient.example.org%2Frequest%2FGkurKxf5T0Y-mnPFCHqWOMiZi4VS138cQO_V7PZHAdM
-```
-
-Request Object payload:
+JOSE Header:
 ```json
 {
   "alg": "ES256",
-  "kid": "did:example:EiDri#sign1",
-  "typ": "oauth-authz-req+jwt"
-}.
+  "typ": "oauth-authz-req+jwt",
+  "kid": "did:web:identitylab.id#kNEWdFSyvEfr91s1AI3r99C0mqGn6XcA5XDxUwHJ2P0"
+}
+```
+
+Payload:
+```json
 {
-  "client_id": "did:example:EiDri",
-  "scope": "openid profile",
-  "response_type": "id_token",
-  "redirect_uri": "https://client.example.org/cb",
+  "client_id": "decentralized_identifier:did:web:identitylab.id",
+  "response_uri": "https://demo.identitylab.id/auth/callback",
+  "response_type": "vp_token",
+  "response_mode": "direct_post",
   "client_metadata": {
-    "subject_syntax_types_supported": ["did:example"],
-    "id_token_signed_response_alg": "ES256"
+    "vp_formats_supported": {
+      "jwt_vc_json": {
+        "alg_values": ["ES256"]
+      }
+    }
   },
-  "nonce": "n-0S6_WzA2Mj"
-}.[signature]
+  "dcql_query": { ... },
+  "nonce": "n-0S6_WzA2Mj",
+  "state": "eyJhb...6-sVA"
+}
+```
+
+### 2.3 QR Code / Wallet Invocation
+
+The QR code encodes a minimal URI. Two options:
+
+**Option A — Static openid4vp:// scheme:**
+```
+openid4vp://?
+  client_id=decentralized_identifier%3Adid%3Aweb%3Aidentitylab.id
+  &request_uri=https%3A%2F%2Fdemo.identitylab.id%2Fapi%2Fauth%2Frequest%2Fabc123
+  &response_mode=direct_post
+```
+
+**Option B — HTTPS wallet endpoint (if known):**
+```
+https://wallet.example.com/authorize?
+  client_id=decentralized_identifier%3Adid%3Aweb%3Aidentitylab.id
+  &request_uri=https%3A%2F%2Fdemo.identitylab.id%2Fapi%2Fauth%2Frequest%2Fabc123
+```
+
+The QR MUST be compact — only `client_id` + `request_uri` (the signed Request Object lives at the `request_uri`).
+
+### 2.4 Client Identifier Prefixes
+
+The `client_id` carries a prefix telling the Wallet how to interpret it:
+
+| Prefix | Description | Auth Required |
+|---|---|---|
+| `redirect_uri:<url>` | Client ID is the redirect URI itself | No (unsigned OK) |
+| `did:<did>` | Client identified by DID | Yes (sign with DID key) |
+| `verifier_attestation:<id>` | Client has a verifier attestation JWT | Yes |
+| `pre-registered` | Default: known to Wallet ahead of time | Depends |
+| `x509_san_dns:<host>` | X.509 SAN DNS | Yes |
+
+---
+
+## 3. DCQL (Digital Credentials Query Language)
+
+### 3.1 Top-Level
+
+```json
+{
+  "credentials": [ ... ],        // REQUIRED - array of Credential Queries
+  "credential_sets": [ ... ]     // OPTIONAL - OR/optional logic
+}
+```
+
+### 3.2 Credential Query
+
+| Field | Status | Description |
+|---|---|---|
+| `id` | REQUIRED | Unique alphanumeric ID (`[a-zA-Z0-9_-]+`) |
+| `format` | REQUIRED | `jwt_vc`, `dc+sd-jwt`, `mso_mdoc`, `jwt_vp` |
+| `meta` | REQUIRED | Format-specific constraints |
+| `claims` | OPTIONAL | Array of Claim Queries |
+| `claim_sets` | OPTIONAL | Selective disclosure alternatives |
+| `trusted_authorities` | OPTIONAL | Trust framework constraints |
+| `require_cryptographic_holder_binding` | OPTIONAL | Default: `true` |
+| `multiple` | OPTIONAL | Allow multiple VCs? Default: `false` |
+
+**Format-specific `meta`:**
+- `jwt_vc` / `jwt_vp`: `{ "type_values": ["VerifiableCredential", "AcademicCredential"] }`
+- `dc+sd-jwt`: `{ "vct_values": ["https://..."] }`
+- `mso_mdoc`: `{ "doctype_value": "org.iso.18013.5.1.mDL" }`
+
+### 3.3 Claims Query
+
+```json
+{
+  "id": "claim_name",            // Required if claim_sets used
+  "path": ["credentialSubject", "name"],  // JSON path pointer
+  "values": ["expected_value"]   // OPTIONAL - value matching
+}
+```
+
+### 3.4 credential_sets (OR / Optional)
+
+```json
+{
+  "credential_sets": [
+    { "options": [ ["pid"], ["other_pid"] ], "required": true },
+    { "options": [ ["nice_to_have"] ], "required": false }
+  ]
+}
+```
+
+---
+
+## 4. Response
+
+### 4.1 VP Token
+
+The `vp_token` is a JSON object keyed by credential `id` from the DCQL query:
+
+```json
+{
+  "academic_credential": ["eyJhbGci...QMA"]
+}
+```
+
+Each value is an array of one or more presentations (as JWT strings or objects).
+
+### 4.2 direct_post Response
+
+The Wallet sends an HTTP POST to `response_uri`:
+
+```
+POST /auth/callback HTTP/1.1
+Host: demo.identitylab.id
+Content-Type: application/x-www-form-urlencoded
+
+vp_token=...&state=eyJhb...6-sVA
+```
+
+Verifier responds with HTTP 200 + JSON:
+```json
+{
+  "redirect_uri": "https://demo.identitylab.id/dashboard#response_code=abc123"
+}
+```
+
+The `redirect_uri` is OPTIONAL — if present, Wallet redirects the user agent there.
+
+---
+
+## 5. Wallet Invocation (Section 9)
+
+The Verifier invokes the Wallet using:
+
+1. **Custom URL scheme** — `openid4vp://` as the `authorization_endpoint`
+2. **Universal Link / App Link** — HTTPS URL as `authorization_endpoint`
+3. **QR Code** — for cross-device, encode the invocation URI as QR
+
+The `openid4vp://` scheme is registered in IANA. Static configuration for it:
+
+```json
+{
+  "authorization_endpoint": "openid4vp:",
+  "response_types_supported": ["vp_token"],
+  "vp_formats_supported": {
+    "dc+sd-jwt": {
+      "sd-jwt_alg_values": ["ES256"],
+      "kb-jwt_alg_values": ["ES256"]
+    },
+    "mso_mdoc": {}
+  },
+  "request_object_signing_alg_values_supported": ["ES256"]
+}
+```
+
+---
+
+## 6. Comparison: Current Implementation vs OID4VP Spec
+
+| Aspect | Current (wrong) | OID4VP Correct |
+|---|---|---|
+| URI scheme | `siopv2://` | `openid4vp://` or HTTPS wallet endpoint |
+| Response type | `vp_token id_token` | `vp_token` (pure OID4VP) |
+| `id_token_type` | `subject_signed` | Not present (SIOP-only) |
+| `scope` | `openid` | Not needed (SIOP-only) |
+| Client ID | `did:web:identitylab.id` (bare) | `decentralized_identifier:did:web:identitylab.id` |
+| QR content | Full `siopv2://` URI with `request_uri` param | Minimal: `client_id` + `request_uri` |
+| Callback expects | `vp_token` + `id_token` + `state` | Only `vp_token` + `state` |
+| Endpoint name | `siop-request` | `auth/request` or `authorize` |
+| Frontend labels | "SIOP v2" | "OpenID4VP" |
+
+---
+
+## 7. Correct Cross-Device Flow for This Project
+
+```
+[Verifier Server]                          [Wallet App]
+       |                                        |
+       |── POST /api/auth/openid4vp-request ──→  (generate session, nonce, sign Request Object JWT)
+       |←── { sessionId, openid4vpUri } ──────|
+       |                                        |
+       |  (render QR with openid4vp:// URI)     |
+       |                                        |
+       |                              User scans QR with Wallet
+       |                                        |
+       |←── GET /api/auth/request/:sessionId ──|  (fetch signed Request Object)
+       |── Request Object JWT (typ: oauth-authz-req+jwt) ──→|
+       |                                        |
+       |                     Wallet processes DCQL, user consents
+       |                                        |
+       |←── POST /auth/callback ──────────────|
+       |    (vp_token + state)                  |
+       |                                        |
+       |  Return { redirect_uri } or { success, sessionToken }
+       |                                        |
+```
+
+**Request Object payload:**
+```json
+{
+  "client_id": "decentralized_identifier:did:web:identitylab.id",
+  "response_uri": "https://demo.identitylab.id/auth/callback",
+  "response_type": "vp_token",
+  "response_mode": "direct_post",
+  "nonce": "uuid-v4",
+  "state": "uuid-v4",
+  "dcql_query": {
+    "credentials": [{
+      "id": "academic_credential",
+      "format": "jwt_vc",
+      "meta": {
+        "type_values": ["VerifiableCredential", "AcademicCredential"]
+      },
+      "claims": [
+        { "path": ["credentialSubject", "name"] },
+        { "path": ["credentialSubject", "role"] },
+        { "path": ["credentialSubject", "id_number"] },
+        { "path": ["credentialSubject", "faculty"] },
+        { "path": ["issuer"], "values": ["did:web:identitylab.id"] }
+      ]
+    }]
+  }
+}
+```
+
+**QR URI:**
+```
+openid4vp://?
+  client_id=decentralized_identifier%3Adid%3Aweb%3Aidentitylab.id
+  &request_uri=https%3A%2F%2Fdemo.identitylab.id%2Fapi%2Fauth%2Frequest%2F<sessionId>
+  &response_mode=direct_post
+```
+
+**Callback POST body:**
+```
+vp_token={"academic_credential":["eyJhbGci..."]}&state=<state>
+```
+
+**Callback response (on success):**
+```json
+{
+  "redirect_uri": "https://demo.identitylab.id/dashboard#response_code=<code>"
+}
 ```

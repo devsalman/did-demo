@@ -59,7 +59,7 @@ router.post('/vc/create', async (req, res) => {
         'https://www.w3.org/ns/credentials/v2',
         'https://www.w3.org/ns/credentials/examples/v2',
       ],
-      type: ['VerifiableCredential'],
+      type: ['VerifiableCredential', 'AcademicCredential'],
       id: `urn:uuid:${crypto.randomUUID()}`,
       issuer: `${keys.did.id}`,
       issuanceDate: new Date().toISOString(),

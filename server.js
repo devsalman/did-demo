@@ -27,6 +27,6 @@ app.listen(PORT, () => {
   console.log(`\n✅ SSI VC Issuer running on http://localhost:${PORT}`);
   console.log(`🔑 Issuer DID: did:web:identitylab.id`);
   console.log(`📄 VC Demo: http://localhost:${PORT}`);
-  console.log(`🔐 SIOP Login: http://localhost:${PORT}/login\n`);
+  console.log(`🔐 OpenID4VP Login: http://localhost:${PORT}/login\n`);
 });
 

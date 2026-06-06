@@ -7,15 +7,18 @@ import { v4 as uuidv4 } from 'uuid';
 
 const router = express.Router();
 
-// Load keys with error handling
+const ISSUER_DID = 'did:web:identitylab.id';
+const CALLBACK_URL = 'https://demo.identitylab.id/auth/callback';
+const BASE_URL = 'https://demo.identitylab.id';
+
 function loadKeys() {
-  const didPath = process.env.PUBLIC_KEY_FILE || path.join(os.homedir(), '.key', 'did.json');
-  const jwkPath = process.env.PRIVATE_KEY_FILE || path.join(os.homedir(), '.key', 'key.json');
-  
+  const didPath = process.env.PUBLIC_KEY_FILE || path.join(os.homedir(), '.identitylab.id', 'key', 'did.json');
+  const jwkPath = process.env.PRIVATE_KEY_FILE || path.join(os.homedir(), '.identitylab.id', 'key', 'key.json');
+
   if (!fs.existsSync(jwkPath) || !fs.existsSync(didPath)) {
     throw new Error(`Key files not found. Expected:\n- ${jwkPath}\n- ${didPath}`);
   }
-  
+
   const jwk = JSON.parse(fs.readFileSync(jwkPath, 'utf-8'));
   const did = JSON.parse(fs.readFileSync(didPath, 'utf-8'));
   return { jwk, did };
@@ -25,28 +28,34 @@ let keys;
 try {
   keys = loadKeys();
 } catch (error) {
-  console.error(`⚠️  Warning: ${error.message}`);
+  console.error(`Warning: ${error.message}`);
 }
 
-// In-memory session store (use Redis/DB in production)
 const sessions = new Map();
-const requestObjects = new Map(); // Store request JWTs for request_uri method
+const requestObjects = new Map();
 
-// SIOP Request Object endpoint - hosts the signed JWT
+// Derive the kid from the DID document's first verification method
+function getKid() {
+  if (!keys) return null;
+  const vm = keys.did.verificationMethod?.[0];
+  return vm?.id || null;
+}
+
+// Serve the signed Request Object JWT (request_uri method)
 router.get('/api/auth/request/:sessionId', (req, res) => {
   const { sessionId } = req.params;
   const requestJwt = requestObjects.get(sessionId);
-  
+
   if (!requestJwt) {
     return res.status(404).json({ error: 'Request not found' });
   }
-  
+
   res.setHeader('Content-Type', 'application/oauth-authz-req+jwt');
   res.send(requestJwt);
 });
 
-// SIOP Request Object endpoint
-router.post('/api/auth/siop-request', async (req, res) => {
+// Initiate OID4VP authorization request
+router.post('/api/auth/openid4vp-request', async (req, res) => {
   try {
     if (!keys) {
       return res.status(500).json({ error: 'Key files not configured' });
@@ -56,147 +65,170 @@ router.post('/api/auth/siop-request', async (req, res) => {
     const nonce = uuidv4();
     const state = uuidv4();
 
-    // Store session for callback verification
-    sessions.set(sessionId, {
+    sessions.set(state, {
       nonce,
       state,
+      sessionId,
       createdAt: Date.now(),
-      expiresAt: Date.now() + 15 * 60 * 1000, // 15 min expiry
+      expiresAt: Date.now() + 15 * 60 * 1000,
     });
 
-    // SIOPv2 + OID4VP Authorization Request (per spec)
-    // Uses DCQL (Digital Credentials Query Language) instead of legacy presentation_definition
+    const kid = getKid();
+
     const authRequest = {
-      client_id: 'did:web:identitylab.id',
-      redirect_uri: 'https://demo.identitylab.id/auth/callback',
-      response_type: 'vp_token id_token',
+      client_id: `decentralized_identifier:${ISSUER_DID}`,
+      response_uri: CALLBACK_URL,
+      response_type: 'vp_token',
       response_mode: 'direct_post',
-      scope: 'openid',
-      id_token_type: 'subject_signed',
       nonce,
       state,
+      client_metadata: {
+        vp_formats_supported: {
+          jwt_vc_json: {
+            alg_values: [keys.jwk.alg],
+          },
+        },
+      },
       dcql_query: {
         credentials: [
           {
             id: 'academic_credential',
             format: 'jwt_vc',
+            meta: {
+              type_values: ['VerifiableCredential', 'AcademicCredential'],
+            },
             claims: [
-              { path: ['credentialSubject', 'degree'] },
-              { path: ['issuer'], values: ['did:web:identitylab.id'] },
+              { path: ['credentialSubject', 'name'] },
+              { path: ['credentialSubject', 'role'] },
+              { path: ['credentialSubject', 'id_number'] },
+              { path: ['credentialSubject', 'faculty'] },
+              { path: ['issuer'], values: [ISSUER_DID] },
             ],
           },
         ],
       },
     };
 
-    // Sign the request object with issuer's private key
     const privateKey = await jose.importJWK(keys.jwk);
     const requestJwt = await new jose.SignJWT(authRequest)
-      .setProtectedHeader({ alg: keys.jwk.alg, typ: 'oauth-authz-req+jwt', kid: `did:web:identitylab.id#key-1` })
+      .setProtectedHeader({
+        alg: keys.jwk.alg,
+        typ: 'oauth-authz-req+jwt',
+        kid,
+      })
       .setIssuedAt()
       .setExpirationTime('15m')
       .sign(privateKey);
 
-    // Store the request JWT for request_uri method
     requestObjects.set(sessionId, requestJwt);
 
-    // SIOP v2 spec: use request_uri method (not embedding JWT in QR)
-    const requestUri = `https://demo.identitylab.id/api/auth/request/${sessionId}`;
-    const siopUri = `siopv2://?client_id=${encodeURIComponent('did:web:identitylab.id')}&request_uri=${encodeURIComponent(requestUri)}&nonce=${encodeURIComponent(nonce)}`;
+    const requestUri = `${BASE_URL}/api/auth/request/${sessionId}`;
+    const clientIdEncoded = encodeURIComponent(`decentralized_identifier:${ISSUER_DID}`);
+    const requestUriEncoded = encodeURIComponent(requestUri);
+    const openid4vpUri = `openid4vp://?client_id=${clientIdEncoded}&request_uri=${requestUriEncoded}&response_mode=direct_post`;
 
     res.json({
       sessionId,
-      siopUri,
+      openid4vpUri,
       requestUri,
-      requestJwt, // Also return for debugging
+      requestJwt,
     });
   } catch (error) {
-    console.error('SIOP Request Error:', error);
+    console.error('OID4VP Request Error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Callback endpoint to handle SIOP response
-router.post('/auth/callback', async (req, res) => {
+async function handleCallback(vp_token, state, res) {
   try {
-    const { vp_token, id_token, state } = req.body;
-
     if (!vp_token || !state) {
       return res.status(400).json({ error: 'Missing vp_token or state' });
     }
 
-    // Verify session exists and is valid
     const session = sessions.get(state);
     if (!session || session.expiresAt < Date.now()) {
       return res.status(401).json({ error: 'Invalid or expired session' });
     }
 
-    // Decode and verify VP token (without verification for now - in prod, verify signature)
-    const vpDecoded = jose.decodeJwt(vp_token);
-    const idTokenDecoded = id_token ? jose.decodeJwt(id_token) : null;
-
-    // Extract credential from presentation
     let credential = null;
     let credentialSubject = null;
 
-    if (vpDecoded.verifiablePresentation) {
-      const presentation = vpDecoded.verifiablePresentation;
-      if (Array.isArray(presentation.verifiableCredential) && presentation.verifiableCredential.length > 0) {
-        // Decode the first credential
-        const credJwt = presentation.verifiableCredential[0];
-        const credDecoded = jose.decodeJwt(credJwt);
-        credential = credDecoded;
-        credentialSubject = credDecoded.credentialSubject;
+    let vpData;
+    if (typeof vp_token === 'string') {
+      try {
+        vpData = JSON.parse(vp_token);
+      } catch {
+        vpData = { academic_credential: [vp_token] };
+      }
+    } else {
+      vpData = vp_token;
+    }
+
+    const credentialIds = Object.keys(vpData);
+    if (credentialIds.length > 0) {
+      const presentations = vpData[credentialIds[0]];
+      if (Array.isArray(presentations) && presentations.length > 0) {
+        const credJwt = presentations[0];
+        if (typeof credJwt === 'string') {
+          const credDecoded = jose.decodeJwt(credJwt);
+          credential = credDecoded;
+          credentialSubject = credDecoded?.credentialSubject || null;
+        } else if (typeof credJwt === 'object') {
+          credential = credJwt;
+          credentialSubject = credJwt?.credentialSubject || null;
+        }
       }
     }
 
-    // Verify nonce matches
-    if (vpDecoded.nonce !== session.nonce) {
+    if (credential && credential.nonce && credential.nonce !== session.nonce) {
       return res.status(401).json({ error: 'Nonce mismatch' });
     }
 
-    // Create user session
     const userSession = {
       id: uuidv4(),
       authenticated: true,
-      did: credentialSubject?.id || idTokenDecoded?.sub,
-      degree: credentialSubject?.degree,
-      institution: credentialSubject?.institution,
+      did: credentialSubject?.id,
       name: credentialSubject?.name,
+      role: credentialSubject?.role,
+      idNumber: credentialSubject?.id_number,
+      faculty: credentialSubject?.faculty,
       issuer: credential?.issuer,
       issuedAt: credential?.issuanceDate,
+      credential,
       vpToken: vp_token,
-      idToken: id_token,
       authenticatedAt: new Date().toISOString(),
     };
 
-    // Store session (use Redis in production)
     sessions.set(userSession.id, userSession);
-
-    // Clean up auth session
+    sessions.set(session.sessionId, userSession);
     sessions.delete(state);
 
-    // Redirect to dashboard with session token
     res.json({
       success: true,
       sessionToken: userSession.id,
       user: {
         did: userSession.did,
         name: userSession.name,
-        degree: userSession.degree,
-        institution: userSession.institution,
+        role: userSession.role,
+        idNumber: userSession.idNumber,
+        faculty: userSession.faculty,
       },
     });
   } catch (error) {
     console.error('Callback Error:', error);
     res.status(500).json({ error: error.message });
   }
+}
+
+// Callback endpoint — receives VP token from wallet
+router.post('/auth/callback', (req, res) => {
+  handleCallback(req.body.vp_token, req.body.state, res);
 });
 
 // Verify session endpoint
 router.get('/api/auth/verify', (req, res) => {
   const sessionToken = req.query.token;
-  
+
   if (!sessionToken) {
     return res.status(401).json({ authenticated: false });
   }
@@ -211,9 +243,36 @@ router.get('/api/auth/verify', (req, res) => {
     user: {
       did: session.did,
       name: session.name,
-      degree: session.degree,
-      institution: session.institution,
+      role: session.role,
+      idNumber: session.idNumber,
+      faculty: session.faculty,
       authenticatedAt: session.authenticatedAt,
+    },
+  });
+});
+
+// Serve full credential data
+router.get('/api/auth/credential', (req, res) => {
+  const sessionToken = req.query.token;
+
+  if (!sessionToken) {
+    return res.status(401).json({ error: 'No session token' });
+  }
+
+  const session = sessions.get(sessionToken);
+  if (!session || !session.authenticated) {
+    return res.status(401).json({ error: 'Invalid or expired session' });
+  }
+
+  res.json({
+    credential: session.credential,
+    vpToken: session.vpToken,
+    user: {
+      did: session.did,
+      name: session.name,
+      role: session.role,
+      idNumber: session.idNumber,
+      faculty: session.faculty,
     },
   });
 });

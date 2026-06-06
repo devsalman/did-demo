@@ -150,13 +150,16 @@
   <div class="container">
     <div class="header">
       <h1>✓ Authenticated</h1>
-      <p>SIOP v2 Login Successful</p>
-      <div class="status-badge">VERIFIED WITH SSI</div>
+      <p>OpenID4VP Login Successful</p>
+      <div class="status-badge">VERIFIED WITH VC</div>
     </div>
 
     <div id="content"></div>
 
-    <button class="button" onclick="logout()">Logout</button>
+    <div style="display: flex; gap: 10px; margin-top: 15px;">
+      <button class="button" id="viewCredentialBtn" onclick="viewCredential()">View Credential</button>
+      <button class="button" style="border-color: var(--text-secondary); color: var(--text-secondary);" onclick="logout()">Logout</button>
+    </div>
   </div>
 
   <script>
@@ -197,12 +200,16 @@
             <span class="value">${user.did}</span>
           </div>
           <div class="info-row">
-            <span class="label">Degree:</span>
-            <span class="value">${user.degree || 'N/A'}</span>
+            <span class="label">Role:</span>
+            <span class="value">${user.role || 'N/A'}</span>
           </div>
           <div class="info-row">
-            <span class="label">Institution:</span>
-            <span class="value">${user.institution || 'N/A'}</span>
+            <span class="label">ID Number:</span>
+            <span class="value">${user.idNumber || 'N/A'}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Faculty:</span>
+            <span class="value">${user.faculty || 'N/A'}</span>
           </div>
           <div class="info-row">
             <span class="label">Authenticated:</span>
@@ -216,6 +223,10 @@
     function showError(message) {
       const content = document.getElementById('content');
       content.innerHTML = `<div class="error">${message}</div>`;
+    }
+
+    function viewCredential() {
+      window.location.href = '/credential?session=' + sessionToken;
     }
 
     function logout() {

@@ -15,4 +15,9 @@ router.get('/dashboard', (req, res) => {
   res.render('dashboard', { session });
 });
 
+router.get('/credential', (req, res) => {
+  const session = req.query.session;
+  res.render('credential', { session });
+});
+
 export default router;

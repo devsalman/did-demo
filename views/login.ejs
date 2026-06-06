@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SSI Login - Identity Lab</title>
+  <title>OpenID4VP Login - Identity Lab</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
@@ -261,7 +261,7 @@
 <body>
   <div class="login-container">
     <div class="header">
-      <h1>🔐 SSI Login</h1>
+      <h1>🔐 OpenID4VP Login</h1>
       <p>PRESENT YOUR ACADEMIC CREDENTIAL</p>
     </div>
 
@@ -276,7 +276,7 @@
               Loading QR...
             </div>
           </div>
-          <div class="qr-status">Scan with your SIOP v2 wallet app</div>
+          <div class="qr-status">Scan with your OpenID4VP wallet app</div>
         </div>
       </div>
 
@@ -284,10 +284,10 @@
       <div class="method" style="max-width: 400px; width: 100%;">
         <div class="method-title">🔑 Or Launch Wallet Directly</div>
         <div class="method-content">
-          <button class="button" id="ssiLoginBtn" onclick="handleSameDeviceLogin()">
-            Launch SSI Wallet
+          <button class="button" id="walletLoginBtn" onclick="handleSameDeviceLogin()">
+            Open Wallet App
           </button>
-          <div class="qr-status" id="sameDeviceStatus">For same-device authentication</div>
+          <div class="qr-status" id="sameDeviceStatus">Opens wallet for same-device presentation</div>
         </div>
       </div>
     </div>
@@ -295,7 +295,7 @@
     <div class="status-message" id="statusMessage"></div>
 
     <div class="footer">
-      <p>Identity Lab Demo — SIOP v2 Authentication</p>
+      <p>Identity Lab Demo — OpenID4VP Authentication</p>
       <p style="margin-top: 8px; font-size: 10px;">Issuer: did:web:identitylab.id</p>
     </div>
   </div>
@@ -303,7 +303,7 @@
   <script>
     const state = {
       sessionId: null,
-      siopUri: null,
+      openid4vpUri: null,
     };
 
     // Initialize login on page load
@@ -313,23 +313,23 @@
 
     async function initializeLogin() {
       try {
-        showStatus('Generating SIOP request...', 'info');
+        showStatus('Generating OpenID4VP request...', 'info');
         
-        const response = await fetch('/api/auth/siop-request', {
+        const response = await fetch('/api/auth/openid4vp-request', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
         });
 
         if (!response.ok) {
-          throw new Error('Failed to generate SIOP request');
+          throw new Error('Failed to generate OpenID4VP request');
         }
 
         const data = await response.json();
         state.sessionId = data.sessionId;
-        state.siopUri = data.siopUri;
+        state.openid4vpUri = data.openid4vpUri;
 
-        // Generate QR code with SIOP URI
-        await generateQRCode(data.siopUri);
+        // Generate QR code with OpenID4VP URI
+        await generateQRCode(data.openid4vpUri);
         
         clearStatus();
       } catch (error) {
@@ -337,9 +337,9 @@
       }
     }
 
-    async function generateQRCode(siopUri) {
+    async function generateQRCode(openid4vpUri) {
       try {
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(siopUri)}`;
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(openid4vpUri)}`;
         const qrImg = document.getElementById('qrImage');
         qrImg.onload = () => {
           const container = document.getElementById('qrCodeContainer');
@@ -355,13 +355,12 @@
     }
 
     function handleSameDeviceLogin() {
-      if (!state.siopUri) {
-        showStatus('SIOP URI not ready', 'error');
+      if (!state.openid4vpUri) {
+        showStatus('OpenID4VP URI not ready', 'error');
         return;
       }
 
-      // Custom URI scheme for wallet apps
-      const deepLink = state.siopUri;
+      const deepLink = state.openid4vpUri;
       
       showStatus(`<span class="loading-spinner"></span> Opening wallet...`, 'info');
       
@@ -370,7 +369,7 @@
 
       // Fallback: Show instructions if no wallet is installed
       setTimeout(() => {
-        showStatus('Install a SIOP v2 compatible wallet to use this feature', 'error');
+        showStatus('Install an OpenID4VP compatible wallet to use this feature', 'error');
       }, 1500);
     }
 
@@ -394,7 +393,7 @@
             if (data.authenticated) {
               showStatus(`✓ Welcome ${data.user.name || data.user.did}!`, 'success');
               setTimeout(() => {
-                window.location.href = '/dashboard?session=' + state.sessionId;
+                window.location.href = '/credential?session=' + state.sessionId;
               }, 1500);
             }
           })
