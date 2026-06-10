@@ -202,13 +202,67 @@ async function verifyCredentialJwt(jwt) {
       crv: 'Ed25519',
       x: Buffer.from(rawKey).toString('base64url'),
     };
-    publicKey = await jose.importJWK(jwk);
+    publicKey = await jose.importJWK(jwk, 'EdDSA');
   } else {
     throw new Error(`Unsupported key format for ${vm.id}`);
   }
 
   await jose.jwtVerify(jwt, publicKey);
   return payload;
+}
+
+async function verifyVpPresentation(presentationJwt) {
+  // Step 1: Verify the VP JWT signature (holder binding)
+  const vpPayload = await verifyCredentialJwt(presentationJwt);
+  const vpData = vpPayload.vp;
+
+  if (!vpData || !vpData.verifiableCredential) {
+    throw new Error('Presentation JWT missing vp.verifiableCredential');
+  }
+
+  // Step 2: Extract inner VC from the presentation
+  let innerVcJwt = null;
+  const vcList = vpData.verifiableCredential;
+
+  if (Array.isArray(vcList) && vcList.length > 0) {
+    const first = vcList[0];
+    if (typeof first === 'string') {
+      innerVcJwt = first;
+    } else if (typeof first === 'object' && first.type?.includes('EnvelopedVerifiableCredential') && first.id) {
+      // data:application/vc+jwt,<JWT>
+      const prefix = 'data:application/vc+jwt,';
+      if (first.id.startsWith(prefix)) {
+        innerVcJwt = first.id.slice(prefix.length);
+      }
+    }
+  }
+
+  if (!innerVcJwt) {
+    throw new Error('No verifiable credential found in presentation');
+  }
+
+  // Step 3: Verify the inner VC JWT signature (issuer binding)
+  const vcPayload = await verifyCredentialJwt(innerVcJwt);
+
+  // Step 4: Verify holder matches credential subject
+  const holderDid = vpPayload.iss || vpPayload.sub;
+  const vpHolder = vpPayload.vp?.holder;
+  const subjectDid = vcPayload.credentialSubject?.id;
+
+  if (holderDid && vpHolder && holderDid !== vpHolder) {
+    throw new Error(`VP iss (${holderDid}) does not match vp.holder (${vpHolder})`);
+  }
+
+  if (holderDid && subjectDid && holderDid !== subjectDid) {
+    throw new Error(`Holder DID (${holderDid}) does not match credential subject (${subjectDid})`);
+  }
+
+  return {
+    credential: vcPayload,
+    credentialSubject: vcPayload.credentialSubject || null,
+    holderDid,
+    vpPayload,
+  };
 }
 
 async function handleCallback(vp_token, state, res) {
@@ -226,6 +280,7 @@ async function handleCallback(vp_token, state, res) {
 
     let credential = null;
     let credentialSubject = null;
+    let holderDid = null;
 
     let vpData;
     if (typeof vp_token === 'string') {
@@ -244,9 +299,17 @@ async function handleCallback(vp_token, state, res) {
       if (Array.isArray(presentations) && presentations.length > 0) {
         const credJwt = presentations[0];
         if (typeof credJwt === 'string') {
-          const credDecoded = await verifyCredentialJwt(credJwt);
-          credential = credDecoded;
-          credentialSubject = credDecoded?.credentialSubject || null;
+          const payload = jose.decodeJwt(credJwt);
+          if (payload.vp) {
+            const result = await verifyVpPresentation(credJwt);
+            credential = result.credential;
+            credentialSubject = result.credentialSubject;
+            holderDid = result.holderDid;
+          } else {
+            const credDecoded = await verifyCredentialJwt(credJwt);
+            credential = credDecoded;
+            credentialSubject = credDecoded?.credentialSubject || null;
+          }
         } else if (typeof credJwt === 'object') {
           credential = credJwt;
           credentialSubject = credJwt?.credentialSubject || null;
